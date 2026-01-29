@@ -228,7 +228,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 📧 Email: support@opendbs.org
+- 📧 Email: support@opendbs.in
 - 💬 Discord: [Join our community](https://discord.gg/opendbs)
 - 📖 Documentation: [docs.opendbs.org](https://docs.opendbs.in)
 - 🐛 Issues: [GitHub Issues](https://github.com/endurasolution/opendbs/issues)
