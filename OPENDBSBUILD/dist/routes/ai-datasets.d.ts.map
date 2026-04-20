@@ -1,0 +1,1 @@
+{"version":3,"file":"ai-datasets.d.ts","sourceRoot":"","sources":["../../src/routes/ai-datasets.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,kBAAkB,EAAE,MAAM,SAAS,CAAC;AAC7C,OAAO,EAAE,aAAa,EAAE,MAAM,WAAW,CAAC;AAE1C,OAAO,EAAE,WAAW,EAAE,MAAM,0BAA0B,CAAC;AAGvD,wBAAgB,qBAAqB,CACjC,WAAW,EAAE,WAAW,EACxB,MAAM,EAAE,aAAa,GACtB,kBAAkB,CAiIpB"}

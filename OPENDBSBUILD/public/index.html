@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenDBS - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/lint/lint.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/lint/lint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/lint/json-lint.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsonlint/1.6.0/jsonlint.min.js"></script>
+</head>
+
+<body>
+
+    <div class="d-flex" id="wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar p-3 d-none d-md-flex">
+            <img src="./img/logo.png" alt="" srcset="">
+
+            <ul class="nav flex-column flex-grow-1" style="overflow-y: hidden;">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" onclick="app.showDashboard()">
+                        <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mt-3">
+                    <span class="text-muted small text-uppercase fw-bold px-2">Databases</span>
+                </li>
+                <!-- Scrollable Db List -->
+                <div id="dbList" class="mt-2 flex-grow-1">
+                    <div class="text-center text-muted small mt-2">Loading...</div>
+                </div>
+
+                <div id="adminMenu">
+                    <li class="nav-item mt-3">
+                        <span class="text-muted small text-uppercase fw-bold px-2">System</span>
+                    </li>
+                   
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="app.showBackups()">
+                            <i class="bi bi-hdd-network me-2"></i> Backups
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" onclick="app.showSettings()">
+                            <i class="bi bi-sliders me-2"></i> Settings
+                        </a>
+                    </li>
+                </div>
+            </ul>
+
+            <div class="mt-3 pt-3 border-top border-secondary">
+                <div class="d-flex align-items-center mb-2 px-2">
+                    <div class="avatar bg-primary rounded-circle me-2 d-flex align-items-center justify-content-center text-white small"
+                        style="width:28px;height:28px;flex-shrink:0;">
+                        <i class="bi bi-person-fill"></i>
+                    </div>
+                    <div class="small text-truncate" style="max-width: 140px;">
+                        <span id="currentUser" class="fw-bold">User</span>
+                    </div>
+                </div>
+                <button onclick="app.showChangePassword()"
+                    class="btn btn-sm btn-link text-muted text-decoration-none w-100 text-start ps-1 mb-1"
+                    style="font-size:0.85rem;"><i class="bi bi-key me-2"></i>Change Password</button>
+                <button onclick="app.logout()" class="btn btn-sm btn-outline-danger w-100 mt-1">Logout</button>
+            </div>
+        </div>
+
+        <!-- Page Content -->
+        <div class="main-content d-flex flex-column">
+            <!-- Navbar (Mobile) -->
+            <nav class="navbar navbar-dark bg-dark d-md-none border-bottom border-secondary px-3">
+                <span class="navbar-brand">OpenDBS</span>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+            </nav>
+
+            <main class="flex-grow-1 p-4" id="mainContent">
+                <!-- Content injected here -->
+            </main>
+
+            <footer class="footer mt-auto py-3 px-4 border-top border-secondary bg-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">
+                        &copy; 2026 <strong>OpenDBS</strong>. Released under the <a href="#"
+                            class="text-decoration-none text-muted">MIT License</a>.
+                    </span>
+                    <span class="text-muted small">
+                        <span id="appVersion">v1.0.0</span> &bull; <a href="https://github.com/opendbs"
+                            class="text-decoration-none text-muted" target="_blank">Documentation</a>
+                    </span>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editorModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editDocId">
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Document ID</label>
+                        <input type="text" class="form-control" id="editorIdDisplay" readonly>
+                    </div>
+
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs mb-3" id="editorTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="table-tab" data-bs-toggle="tab"
+                                data-bs-target="#tableView" type="button">
+                                <i class="bi bi-table me-2"></i>Table View
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="json-tab" data-bs-toggle="tab" data-bs-target="#jsonView"
+                                type="button">
+                                <i class="bi bi-code-slash me-2"></i>JSON View
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="editorTabContent">
+                        <!-- Table View Tab -->
+                        <div class="tab-pane fade show active" id="tableView" role="tabpanel">
+                            <div id="tableViewContent" class="table-responsive"
+                                style="max-height: 400px; overflow-y: auto;">
+                                <!-- Dynamically populated table -->
+                            </div>
+                        </div>
+
+                        <!-- JSON View Tab -->
+                        <div class="tab-pane fade" id="jsonView" role="tabpanel">
+                            <textarea class="form-control font-monospace" id="editorData" rows="16"
+                                style="background:var(--bg-body); color:var(--text-main); font-family:monospace;"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="app.saveDocument()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Rack Modal -->
+    <div class="modal fade" id="createRackModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Rack</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="newRackDbName">
+                    <div class="mb-3">
+                        <label class="form-label">Rack Name</label>
+                        <input type="text" class="form-control" id="newRackName" placeholder="users">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type</label>
+                        <select class="form-select" id="newRackType">
+                            <option value="nosql" selected>NoSQL (Document)</option>
+                            <option value="sql">SQL (Relational)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="app.createRack()">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Change Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="newPasswordInput" minlength="6">
+                        <div class="form-text">Must be at least 6 characters.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="app.changePassword()">Update</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Database Modal -->
+    <div class="modal fade" id="createDbModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Database</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Database Name</label>
+                        <input type="text" class="form-control" id="newDbName" placeholder="my_app_db">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="app.createDatabase()">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
+    <div class="modal fade" id="createUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="newUsername" placeholder="john_doe">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" id="newUserPassword" minlength="6">
+                        <div class="form-text">Must be at least 6 characters</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" id="newUserRole" onchange="app.togglePermissionsSection()">
+                            <option value="user" selected>User (Custom Permissions)</option>
+                            <option value="admin">Admin (Full Access to All)</option>
+                        </select>
+                    </div>
+
+                    <!-- Permissions Section (only for 'user' role) -->
+                    <div id="permissionsSection">
+                        <hr>
+                        <h6 class="mb-3">Database Permissions</h6>
+                        <div id="databasePermissionsList">
+                            <div class="text-muted small">Loading databases...</div>
+                        </div>
+                        <div class="form-text mt-2">
+                            <i class="bi bi-info-circle"></i> Select which databases this user can access and their
+                            permissions.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="app.createUser()">Create User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal fade" id="editUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editUserId">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="editUsername" readonly>
+                        <div class="form-text">Username cannot be changed</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Password (Optional)</label>
+                        <input type="password" class="form-control" id="editUserPassword" minlength="6"
+                            placeholder="Leave empty to keep current password">
+                        <div class="form-text">Only fill this to change the password</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" id="editUserRole" onchange="app.toggleEditPermissionsSection()">
+                            <option value="user">User (Custom Permissions)</option>
+                            <option value="admin">Admin (Full Access to All)</option>
+                        </select>
+                    </div>
+
+                    <!-- Permissions Section (only for 'user' role) -->
+                    <div id="editPermissionsSection">
+                        <hr>
+                        <h6 class="mb-3">Database Permissions</h6>
+                        <div id="editDatabasePermissionsList">
+                            <div class="text-muted small">Loading databases...</div>
+                        </div>
+                        <div class="form-text mt-2">
+                            <i class="bi bi-info-circle"></i> Select which databases this user can access and their
+                            permissions.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="app.updateUser()">Update User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Init
+        if (!app.checkAuth()) {
+            window.location.href = 'login.html';
+        } else {
+            app.init();
+        }
+    </script>
+</body>
+
+</html>
