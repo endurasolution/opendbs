@@ -1,6 +1,6 @@
 # OpenDBS - Open Database System
 
-![OpenDBS Logo](https://img.shields.io/badge/OpenDBS-v0.1.0-blue)
+![OpenDBS Logo](https://img.shields.io/badge/OpenDBS-v0.1.5-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![Rust](https://img.shields.io/badge/rust-%3E%3D1.70-orange)
