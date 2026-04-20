@@ -45,8 +45,13 @@
 - Role-based access control (Read/Write/Delete)
 - Rack-level (table-level) permissions
 - Root and user-level access
-- API key authentication
+- API key authentication with timing-safe comparison
 - Audit logging
+- Brute-force login lockout
+- Password strength enforcement
+- Prototype-pollution & ReDoS protection
+- Secret masking in API responses
+- SQL error sanitisation
 
 ## 📋 Prerequisites
 
@@ -59,7 +64,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/opendbs.git
+git clone https://github.com/endurasolution/opendbs.git
 cd opendbs
 
 # Install Node.js dependencies
@@ -194,6 +199,29 @@ await db.createUser({
 });
 ```
 
+## 🔐 Security Hardening *(v0.1.5)*
+
+### Engine (`engine.ts`)
+| Feature | Description |
+|---|---|
+| **Prototype-pollution guard** | Blocks `__proto__`, `constructor`, `prototype` keys in `matchesQuery` before evaluation |
+| **Regex complexity guard** | Rejects ReDoS-prone patterns that may trigger catastrophic backtracking |
+
+### Auth (`auth.ts`)
+| Feature | Description |
+|---|---|
+| **Brute-force lockout** | Accounts are temporarily locked after repeated failed login attempts |
+| **Password-strength enforcement** | Minimum complexity rules enforced at registration |
+| **Timing-safe API key compare** | Uses `crypto.timingSafeEqual` to prevent timing-based key enumeration attacks |
+
+### Settings & SQL (`settings.ts` + `sql.ts`)
+| Feature | Description |
+|---|---|
+| **Secret masking** | `SECRET`, `PASSWORD`, `KEY`, `TOKEN` env values are redacted in GET `/settings` responses |
+| **SQL error sanitisation** | Raw query strings are stripped from client-facing error messages |
+
+---
+
 ## 📊 Performance Benchmarks
 
 | Operation | OpenDBS | MongoDB | Speedup |
@@ -234,7 +262,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📧 Email: support@opendbs.org
 - 💬 Discord: [Join our community](https://discord.gg/opendbs)
 - 📖 Documentation: [docs.opendbs.org](https://docs.opendbs.org)
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/opendbs/issues)
+- 🐛 Issues: [GitHub Issues](https://github.com/endurasolution/opendbs/issues)
 
 ---
 
