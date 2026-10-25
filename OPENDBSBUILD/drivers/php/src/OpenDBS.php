@@ -33,15 +33,18 @@ class Client
     private ?string $totp;
     private ?string $token = null;
     private int $timeout;
+    private bool $verifyTls;
     /** @var \CurlHandle|null */
     private $curl = null;
 
     /**
      * @param string|string[] $url one server, or several cluster members (array or comma-separated)
-     * @param array{apiKey?:string, username?:string, password?:string, totp?:string, timeout?:int, failover?:float} $options
+     * @param array{apiKey?:string, username?:string, password?:string, totp?:string, token?:string, timeout?:int, failover?:float, ignoreSSL?:bool} $options
      *        failover: seconds to keep trying other members while one is down (default 20)
+     *        ignoreSSL: accept self-signed certificates (development only)
+     *        Without apiKey, username/password or token, call login($username, $password) first.
      */
-    public function __construct($url, array $options)
+    public function __construct($url, array $options = [])
     {
         $list = is_array($url) ? $url : explode(',', (string)$url);
         $this->urls = array_values(array_filter(array_map(fn ($u) => rtrim(trim((string)$u), '/'), $list)));
@@ -53,10 +56,9 @@ class Client
         $this->username = $options['username'] ?? null;
         $this->password = $options['password'] ?? null;
         $this->totp = $options['totp'] ?? null;
+        $this->token = $options['token'] ?? null;
         $this->timeout = (int)($options['timeout'] ?? 30);
-        if (!$this->apiKey && !($this->username && $this->password)) {
-            throw new \InvalidArgumentException('Give apiKey, or username and password');
-        }
+        $this->verifyTls = empty($options['ignoreSSL']);
     }
 
     public function __destruct()
@@ -136,6 +138,10 @@ class Client
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => $this->timeout,
         ];
+        if (!$this->verifyTls) {
+            $opts[CURLOPT_SSL_VERIFYPEER] = false;
+            $opts[CURLOPT_SSL_VERIFYHOST] = 0;
+        }
         // Only requests that carry JSON get a body (an empty POSTFIELDS would make
         // curl add a form-encoded Content-Type the server rejects).
         if ($payload !== null) {
@@ -158,8 +164,22 @@ class Client
         return $data;
     }
 
-    public function login(): array
+    /**
+     * Signs in with the constructor's credentials, or with the ones given here (they are kept,
+     * so the client signs in again when the session expires). Returns ['token' => …, 'user' => …].
+     */
+    public function login(?string $username = null, ?string $password = null, ?string $totp = null): array
     {
+        if ($username !== null) {
+            $this->username = $username;
+            $this->password = $password;
+            if ($totp !== null) {
+                $this->totp = $totp;
+            }
+        }
+        if (!$this->username || !$this->password) {
+            throw new \InvalidArgumentException('Give apiKey, or username and password');
+        }
         $data = $this->raw('POST', '/api/auth/login', ['username' => $this->username, 'password' => $this->password], false);
         if (!empty($data['twoFactorRequired'])) {
             if (!$this->totp) {
@@ -168,19 +188,31 @@ class Client
             $data = $this->raw('POST', '/api/auth/login/2fa', ['challenge' => $data['challenge'], 'code' => (string)$this->totp], false);
         }
         $this->token = $data['token'];
-        return $data['user'] ?? [];
+        return $data;
+    }
+
+    /** Use an existing session token. */
+    public function setToken(string $token): void
+    {
+        $this->token = $token;
+    }
+
+    public function token(): ?string
+    {
+        return $this->token;
     }
 
     /** @return mixed */
     public function request(string $method, string $path, mixed $body = null)
     {
-        if (!$this->apiKey && !$this->token) {
+        $canLogin = !$this->apiKey && $this->username && $this->password;
+        if (!$this->apiKey && !$this->token && $canLogin) {
             $this->login();
         }
         try {
             return $this->raw($method, $path, $body);
         } catch (OpenDBSException $e) {
-            if ($e->status === 401 && !$this->apiKey) {
+            if ($e->status === 401 && $canLogin) {
                 $this->login();
                 return $this->raw($method, $path, $body);
             }
@@ -190,7 +222,10 @@ class Client
 
     public function version(): array { return $this->request('GET', '/api/version'); }
     public function me(): array { return $this->request('GET', '/api/auth/me'); }
-    public function listDatabases(): array { return $this->request('GET', '/api/databases')['databases']; }
+    public function listDatabases(bool $includeRacks = false): array
+    {
+        return $this->request('GET', '/api/databases' . ($includeRacks ? '?include_racks=true' : ''))['databases'];
+    }
     public function createDatabase(string $name): array { return $this->request('POST', '/api/databases', ['name' => $name]); }
     public function dropDatabase(string $name): array { return $this->request('DELETE', '/api/databases/' . rawurlencode($name)); }
     public function database(string $name): Database { return new Database($this, $name); }
@@ -212,6 +247,100 @@ class Client
             $ops = $tx->ops;
         }
         return $this->request('POST', '/api/transactions', ['operations' => $ops]);
+    }
+
+    // ── 1.0.0 API: database and rack passed as arguments ──
+    // The first client took the database and rack as arguments. These methods
+    // keep that code working; new code can use database() / rack().
+
+    public function register(array $userData): array { return $this->raw('POST', '/api/auth/register', $userData, false); }
+    public function deleteDatabase(string $name): array { return $this->dropDatabase($name); }
+    public function listRacks(string $database): array { return $this->database($database)->listRacks(); }
+
+    public function createRack(string $database, string $name, string $type = 'nosql', ?array $schema = null): array
+    {
+        $body = ['name' => $name, 'type' => $type];
+        if ($schema) {
+            $body['schema'] = $schema;
+        }
+        return $this->request('POST', '/api/databases/' . rawurlencode($database) . '/racks', $body);
+    }
+
+    public function deleteRack(string $database, string $rack): array { return $this->database($database)->dropRack($rack); }
+    public function clearRack(string $database, string $rack): array { return $this->database($database)->rack($rack)->clear(); }
+
+    /** Returns the server response (['id' => …] or ['ids' => […]]). */
+    public function insert(string $database, string $rack, array $document): array
+    {
+        return $this->request('POST', self::rackPath($database, $rack) . '/documents', $document);
+    }
+
+    /** Equality filters as query parameters, e.g. find('shop', 'users', ['city' => 'Pune']). Returns the documents. */
+    public function find(string $database, string $rack, array $query = [], bool $populate = false): array
+    {
+        $query = array_map(fn ($v) => is_bool($v) ? ($v ? 'true' : 'false') : $v, $query);
+        if ($populate) {
+            $query['populate'] = 'true';
+        }
+        $qs = http_build_query($query);
+        return $this->request('GET', self::rackPath($database, $rack) . '/documents' . ($qs !== '' ? "?$qs" : ''))['results'] ?? [];
+    }
+
+    public function findOne(string $database, string $rack, string $id, bool $populate = false): ?array
+    {
+        return $this->find($database, $rack, ['id' => $id], $populate)[0] ?? null;
+    }
+
+    public function update(string $database, string $rack, string $id, array $updates): array { return $this->database($database)->rack($rack)->update($id, $updates); }
+    public function delete(string $database, string $rack, string $id): array { return $this->database($database)->rack($rack)->delete($id); }
+
+    /** Returns the statement results. */
+    public function sql(string $database, string $query, ?array $params = null): array
+    {
+        $res = $this->database($database)->sql($query, $params);
+        return $res['results'] ?? $res;
+    }
+
+    /** $queryBody = ['query' => […], 'limit' => …, 'skip' => …, 'sort' => …]. Returns the documents. */
+    public function search(string $database, string $rack, array $queryBody): array
+    {
+        return $this->request('POST', self::rackPath($database, $rack) . '/search', $queryBody)['results'] ?? [];
+    }
+
+    public function fuzzySearch(string $database, string $rack, string $field, string $query): array
+    {
+        return $this->database($database)->rack($rack)->fuzzySearch($field, $query)['results'] ?? [];
+    }
+
+    public function vectorSearch(string $database, string $rack, string $field, array $vector, int $k = 5): array
+    {
+        return $this->database($database)->rack($rack)->vectorSearch($field, $vector, $k)['results'] ?? [];
+    }
+
+    public function createBackup(): array { return $this->request('POST', '/api/backup/create'); }
+    public function listBackups(): array { return $this->request('GET', '/api/backup/list')['backups'] ?? []; }
+
+    /** Download URL of a one-rack backup (needs the same credentials). */
+    public function quickBackupRackUrl(string $database, string $rack): string
+    {
+        return $this->url() . '/api/backup/quick?' . http_build_query(['database' => $database, 'rack' => $rack]);
+    }
+
+    private static function rackPath(string $database, string $rack): string
+    {
+        return '/api/databases/' . rawurlencode($database) . '/racks/' . rawurlencode($rack);
+    }
+}
+
+/**
+ * The 1.0.0 class name and constructor: new OpenDBS($baseURL, $token, ['ignoreSSL' => true]).
+ * Same as Client.
+ */
+class OpenDBS extends Client
+{
+    public function __construct($baseURL, ?string $token = null, array $options = [])
+    {
+        parent::__construct($baseURL, $token !== null ? $options + ['token' => $token] : $options);
     }
 }
 
@@ -293,11 +422,28 @@ class Rack
     public function update(string $id, array $doc): array { return $this->client->request('PUT', $this->p('/documents/' . rawurlencode($id)), $doc); }
     public function patch(string $id, array $fields): array { return $this->client->request('PATCH', $this->p('/documents/' . rawurlencode($id)), $fields); }
     public function delete(string $id): array { return $this->client->request('DELETE', $this->p('/documents/' . rawurlencode($id))); }
+    public function clear(): array { return $this->client->request('DELETE', $this->p('/clear')); }
     public function aggregate(array $pipeline): array { return $this->client->request('POST', $this->p('/aggregate'), ['pipeline' => $pipeline])['results']; }
     /** @param string|string[] $fields */
     public function createIndex($fields, bool $unique = false): array
     {
         $body = is_array($fields) ? ['fields' => array_values($fields), 'unique' => $unique] : ['field' => $fields, 'unique' => $unique];
         return $this->client->request('POST', $this->p('/indexes'), $body);
+    }
+    /** @param string|string[] $name */
+    public function dropIndex($name): array
+    {
+        return $this->client->request('DELETE', $this->p('/indexes/' . rawurlencode(is_array($name) ? implode('+', $name) : $name)));
+    }
+    public function indexes(): array { return $this->client->request('GET', $this->p('/indexes'))['details']; }
+    /** Returns ['results' => […], 'count' => …]. */
+    public function fuzzySearch(string $field, string $query, float $threshold = 0.6): array
+    {
+        return $this->client->request('POST', $this->p('/search/fuzzy'), ['field' => $field, 'query' => $query, 'threshold' => $threshold]);
+    }
+    /** Returns ['results' => […], 'count' => …]. */
+    public function vectorSearch(string $field, array $vector, int $k = 10): array
+    {
+        return $this->client->request('POST', $this->p('/search/vector'), ['field' => $field, 'vector' => array_values($vector), 'k' => $k]);
     }
 }

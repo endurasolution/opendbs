@@ -166,7 +166,7 @@ Each statement is checked against your permissions: SELECT needs read, INSERT / 
 
 ## Client libraries
 
-The drivers live in `drivers/` (no third-party dependencies). They are also published as `opendbs` on npm (`npm install opendbs`), PyPI (`pip install opendbs`) and pub.dev (Dart / Flutter). Each one:
+The drivers live in `drivers/` (no third-party dependencies). They are also published as packages: npm `opendbs`, PyPI `opendbs`, Packagist `opendbs/client` and pub.dev `opendbs` (Dart / Flutter). Each one:
 
 - accepts **several server URLs** and moves to another member when one fails (cluster failover);
 - sends an **`Idempotency-Key`** with every write, so a retry after a network error never applies the write twice.
@@ -191,7 +191,7 @@ print(orders.find({"total": {"$gte": 20}}, limit=10))
 ```
 
 ```php
-// PHP 8 — drivers/php (curl)
+// PHP 8 — composer require opendbs/client (curl)
 $db = new OpenDBS\Client('http://10.0.0.5:4402,http://10.0.0.6:4402', ['apiKey' => getenv('OPENDBS_KEY')]);
 $db->database('shop')->rack('orders')->insert(['customer' => 'c-17', 'total' => 49.9]);
 ```

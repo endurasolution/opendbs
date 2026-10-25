@@ -1,9 +1,17 @@
 {
     "name": "opendbs/client",
-    "description": "Official PHP client for OpenDBS (documents, SQL, aggregation, transactions)",
+    "description": "Official PHP client for OpenDBS: documents, SQL, aggregation, transactions, cluster failover",
     "type": "library",
+    "keywords": ["opendbs", "database", "client", "sql", "nosql"],
+    "homepage": "https://github.com/endurasolution/opendbs",
     "license": "CC-BY-NC-4.0",
-    "version": "1.0.1",
+    "authors": [
+        { "name": "OpenDBS Team" }
+    ],
+    "support": {
+        "issues": "https://github.com/endurasolution/opendbs/issues",
+        "source": "https://github.com/endurasolution/php-opendbs"
+    },
     "require": {
         "php": ">=8.0",
         "ext-curl": "*",
@@ -11,5 +19,6 @@
     },
     "autoload": {
         "files": ["src/OpenDBS.php"]
-    }
+    },
+    "minimum-stability": "stable"
 }
