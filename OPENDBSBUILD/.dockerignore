@@ -1,0 +1,19 @@
+# Live state and secrets: never copy them into an image
+data
+backups
+.env
+*.key
+*.log
+*.tmp
+*.zip
+
+# Rebuilt inside the image
+node_modules
+rust-engine/target
+*.node
+
+.git
+drivers
+examples
+tests
+docs

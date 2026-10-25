@@ -36,7 +36,7 @@ OpenDBS is a document **and** SQL database server written in TypeScript (Node.js
 
 ## Quick start
 
-Requirements: **Node.js 18+** (20 or newer recommended). The release build includes the prebuilt Rust engine for Windows x64; on other platforms build it from source (see [Other platforms](#other-platforms-building-the-engine)).
+Requirements: **Node.js 18+** (20 or newer recommended). The release build includes the prebuilt Rust engine for Windows x64; on other platforms build it from source (see [Other platforms](#other-platforms-building-the-engine)) or use [Docker](#with-docker).
 
 ```bash
 git clone https://github.com/endurasolution/opendbs.git
@@ -58,6 +58,20 @@ Then open:
 | `http://localhost:4402/admin/` | Admin panel (`ADMIN_PANEL_ENABLED=true`, path set by `ADMIN_PANEL_PATH`) |
 | `http://localhost:4402/web/` | User web interface (`WEB_INTERFACE_ENABLED=true`) |
 | `http://localhost:4402/health` | Health check |
+
+### With Docker
+
+The image includes the Linux engine and runs in production mode. Data, keys and backups are kept in the `/data` volume:
+
+```bash
+docker run -d --name opendbs -p 4402:4402 -v opendbs-data:/data \
+  -e ADMIN_PASSWORD='choose-a-strong-password' \
+  endurasolution/opendbs:1.0.1
+```
+
+`docker logs opendbs` shows the first-start output. Back up `/data/opendbs.key`, or pass your own key with `-e DB_ENCRYPTION_KEY=…`. A compose file is in [docker/docker-compose.yml](docker/docker-compose.yml), and the [Admin Guide](docs/ADMIN_GUIDE.md#2-installation-and-first-start) covers the details.
+
+### Production
 
 For a server reachable from a network, follow the production checklist in the [Admin Guide](docs/ADMIN_GUIDE.md#production-checklist). At minimum set `NODE_ENV=production`, a strong `JWT_SECRET` and `ADMIN_PASSWORD`, and put HTTPS in front.
 

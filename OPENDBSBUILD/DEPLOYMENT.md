@@ -42,16 +42,14 @@ pm2 startup
 ```
 
 **Option C: Docker**
-Create a Dockerfile:
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --production
-COPY . .
-EXPOSE 4402
-CMD ["npm", "run", "start:prod"]
+The Dockerfile in this folder builds the Linux engine and runs the server in
+production mode, with data, keys and backups in the `/data` volume:
+```bash
+docker build -t opendbs .
+docker run -d --name opendbs -p 4402:4402 -v opendbs-data:/data -e ADMIN_PASSWORD='...' opendbs
 ```
+Or use the published image `endurasolution/opendbs` or `docker/docker-compose.yml`.
+See docs/ADMIN_GUIDE.md (Installation → Docker).
 
 ### 5. Monitoring
 ```bash

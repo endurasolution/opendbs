@@ -1,0 +1,23 @@
+# Single OpenDBS server. Start with:  docker compose up -d
+# The first start prints the admin password in:  docker compose logs opendbs
+services:
+  opendbs:
+    image: endurasolution/opendbs:1.0.1
+    container_name: opendbs
+    restart: unless-stopped
+    ports:
+      - "4402:4402"
+    volumes:
+      - opendbs-data:/data
+    environment:
+      # Optional. Empty = a random password is printed once to the logs.
+      ADMIN_PASSWORD: ""
+      # Recommended: keep the encryption key out of the data volume, e.g. from a
+      # secrets manager (64 hex characters). Empty = generated in /data/opendbs.key.
+      DB_ENCRYPTION_KEY: ""
+      CACHE_SIZE_MB: "512"
+      # Set true only when a reverse proxy (nginx, Caddy, Traefik) is in front.
+      TRUST_PROXY: "false"
+
+volumes:
+  opendbs-data:

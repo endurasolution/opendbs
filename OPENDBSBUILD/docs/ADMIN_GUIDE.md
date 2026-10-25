@@ -62,7 +62,7 @@ Server (one process, port 4402)
 - Node.js 18 or newer (20+ recommended).
 - An SSD.
 - RAM for the cache (`CACHE_SIZE_MB`, default 512 MB) plus about 200 MB.
-- The release build includes the Rust engine for Windows x64. For other platforms, build it from source (`npm run build:rust`).
+- The release build includes the Rust engine for Windows x64. For other platforms, build it from source (see *Other platforms* in the README), or use the Docker image (below), which includes the Linux engine.
 
 **Install**
 
@@ -89,6 +89,31 @@ The server refuses to start, rather than risk data, if:
 - the encryption key does not match the existing data;
 - `NODE_ENV=production` and `JWT_SECRET` is missing or shorter than 32 characters;
 - the cluster settings are invalid (for example `CLUSTER_SECRET` is shorter than 32 characters).
+
+**Docker**
+
+The image `endurasolution/opendbs` (Linux, amd64) contains the server with the Linux engine already built. It runs with `NODE_ENV=production` as the unprivileged user `node`, and keeps everything that must survive an upgrade in the volume `/data`:
+
+| Path in the volume | What |
+|---|---|
+| `/data/db` | Databases (`DB_PATH`) |
+| `/data/backups` | Local backups (`BACKUP_PATH`) |
+| `/data/jwt_secret` | Session-signing secret, generated on the first start if `JWT_SECRET` is not set |
+| `/data/opendbs.key` | Data-encryption key, generated on the first start if neither `DB_ENCRYPTION_KEY` nor `DB_ENCRYPTION_KEY_FILE` is set |
+
+```bash
+docker run -d --name opendbs -p 4402:4402 -v opendbs-data:/data \
+  -e ADMIN_PASSWORD='choose-a-strong-password' \
+  endurasolution/opendbs:1.0.1
+docker logs opendbs        # first start: admin password (if not set) and API key
+```
+
+- Every setting from `.env.example` can be passed with `-e` (or `--env-file`). The image has no `.env` file.
+- A ready-made `docker/docker-compose.yml` is included in the release folder.
+- For production, pass `DB_ENCRYPTION_KEY` from a secrets manager so the key isn't stored in the same volume as the data, and copy `/data/opendbs.key` somewhere safe if you use the generated one.
+- With a bind mount instead of a named volume, the host folder must be writable by uid 1000 (`chown -R 1000:1000 <folder>`), or start the container with `--user`.
+- Cluster members in containers need `CLUSTER_ADVERTISE_URL` set to an address the other members can reach (not the container's internal IP).
+- To build the image yourself: `docker build -t opendbs .` in the release folder. The Dockerfile compiles the Rust engine for Linux (amd64 or arm64).
 
 ---
 
@@ -605,6 +630,8 @@ Start with the [production checklist](#production-checklist). In addition:
 3. Replace the build: `dist/`, `public/`, `drivers/`, `package.json` and the `.node` engine file. Keep `data/`, `backups/`, `.env` and `opendbs.key`. If you build from source, `node scripts/build-production.js` does exactly this.
 4. Run `npm install --omit=dev`.
 5. Start the server and check the Overview page and the version (login screen or `GET /api/version`).
+
+**Docker:** take a backup, then `docker pull endurasolution/opendbs:<new version>` and re-create the container with the same `/data` volume and the same environment. The data, keys and settings stay in the volume.
 
 **Cluster**
 
