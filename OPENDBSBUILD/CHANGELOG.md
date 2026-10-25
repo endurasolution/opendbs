@@ -39,10 +39,13 @@ See [SECURITY.md](SECURITY.md#fixed-in-101) for details.
   - Each dataset now carries a **lineage** id. It is created by the first primary and copied by every full sync, and a replica continues incrementally only from a primary of the same lineage.
   - **After upgrading a cluster, each replica makes one full copy.**
 - **SQL:** a window function combined with `HAVING` failed (`Cannot read properties of undefined`). Fixed.
+- **Older clients:** a request with `Content-Type: application/json` and an empty body was refused with "Body cannot be empty". The 1.0.0 npm client sends its delete, clear and drop calls that way. An empty JSON body is now treated as no body.
 
 ### Other changes
 
 - Version 1.0.1 for the server and the Node.js, Python and PHP drivers.
+- **npm package `opendbs` 1.0.1** is the new Node.js client (no dependencies, cluster failover, safe retries, TypeScript types). Code written for the 1.0.0 client keeps working: its methods, such as `insert(db, rack, doc)` and `login(username, password)`, and its `baseURL` option are still supported. `ignoreSSL` is no longer supported; use `NODE_EXTRA_CA_CERTS`.
+- **Docker image `endurasolution/opendbs:1.0.1`**: builds the Linux engine, runs in production mode as an unprivileged user, and keeps data and keys in the `/data` volume.
 - New documentation: [README](README.md), [Administrator Guide](docs/ADMIN_GUIDE.md) (including cluster and sharding), and [SECURITY.md](SECURITY.md).
 - The admin panel's API docs now list the cluster and sharding endpoints.
 

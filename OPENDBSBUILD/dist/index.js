@@ -100,6 +100,15 @@ async function start() {
     // ── Cluster: requests a replica forwarded keep the real client IP (rate limits, IP allow-lists, audit) ──
     let cluster = null;
     fastify.addHook('onRequest', async (request) => { cluster?.adoptForwardedIp(request); });
+    // An empty body sent as application/json is treated as no body (Fastify refuses it with
+    // "Body cannot be empty"). The 1.0.0 npm client sends DELETE and some POSTs that way.
+    fastify.addHook('onRequest', async (request) => {
+        const h = request.headers;
+        if (h['content-type']?.startsWith('application/json') && !h['transfer-encoding']
+            && (h['content-length'] === undefined || h['content-length'] === '0')) {
+            delete h['content-type'];
+        }
+    });
     // ── Global rate limiting ──────────────────────────────────────────────
     // Not for shard-router traffic: in-process calls, and a router's calls made with an admin or access key.
     let isShardRouterCall = () => false;

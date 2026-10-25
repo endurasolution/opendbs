@@ -1,11 +1,19 @@
 {
-  "name": "opendbs-client",
+  "name": "opendbs",
   "version": "1.0.1",
-  "description": "Official Node.js client for OpenDBS (documents, SQL, aggregation, transactions)",
+  "description": "Official Node.js client for OpenDBS: documents, SQL, aggregation, transactions, cluster failover",
   "main": "index.js",
   "types": "index.d.ts",
   "files": ["index.js", "index.d.ts", "README.md"],
   "engines": { "node": ">=18" },
-  "keywords": ["opendbs", "database", "client", "sql", "nosql"],
+  "keywords": ["opendbs", "database", "client", "sql", "nosql", "document", "vector-search"],
+  "homepage": "https://github.com/endurasolution/opendbs/tree/main/OPENDBSBUILD/drivers/nodejs#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/endurasolution/opendbs.git",
+    "directory": "OPENDBSBUILD/drivers/nodejs"
+  },
+  "bugs": { "url": "https://github.com/endurasolution/opendbs/issues" },
+  "author": "OpenDBS Team",
   "license": "CC-BY-NC-4.0"
 }

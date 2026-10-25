@@ -9,13 +9,13 @@ databases and IP addresses) or with a **username/password** (plus a 2FA code if 
 | | Node.js | Python | PHP |
 |---|---|---|---|
 | Folder | `nodejs/` | `python/` | `php/` |
-| Install | `npm install ./drivers/nodejs` | `pip install ./drivers/python` | `composer require opendbs/client` (path repo) or `require 'drivers/php/src/OpenDBS.php'` |
+| Install | `npm install opendbs` (or `npm install ./drivers/nodejs`) | `pip install ./drivers/python` | `composer require opendbs/client` (path repo) or `require 'drivers/php/src/OpenDBS.php'` |
 | Needs | Node 18+ | Python 3.8+ (stdlib only) | PHP 8.0+ with curl, json |
 
 ## Node.js
 
 ```js
-const { OpenDBS } = require('opendbs-client');
+const { OpenDBS } = require('opendbs');
 const client = new OpenDBS({ url: 'http://localhost:4402', apiKey: process.env.OPENDBS_KEY });
 
 const shop = client.database('shop');

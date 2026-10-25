@@ -3,7 +3,7 @@
 /**
  * OpenDBS client for Node.js (18+). Zero dependencies.
  *
- *   const { OpenDBS } = require('opendbs-client');
+ *   const { OpenDBS } = require('opendbs');
  *   const client = new OpenDBS({ url: 'http://localhost:4402', apiKey: process.env.OPENDBS_KEY });
  *   const users = client.database('shop').rack('users');
  *   const id = await users.insert({ name: 'Asha', age: 31 });
@@ -39,9 +39,12 @@ class OpenDBS {
      * @param {string} [opts.totp]           …with a 2FA code if the account uses 2FA
      * @param {number} [opts.timeoutMs=30000]
      * @param {number} [opts.failoverMs=20000]  how long to keep trying other members (covers an election)
+     * @param {string} [opts.token]          an existing session token
+     * Without apiKey, username/password or token, call login(username, password) before other calls.
      */
     constructor(opts = {}) {
-        const list = Array.isArray(opts.url) ? opts.url : String(opts.url || opts.urls || '').split(',');
+        // baseURL: option name of the 1.0.0 client
+        const list = Array.isArray(opts.url) ? opts.url : String(opts.url || opts.urls || opts.baseURL || '').split(',');
         this.urls = list.map((u) => String(u).trim().replace(/\/+$/, '')).filter(Boolean);
         if (this.urls.length === 0) throw new Error('OpenDBS: url is required');
         this.current = 0;
@@ -51,19 +54,35 @@ class OpenDBS {
         this.password = opts.password || null;
         this.totp = opts.totp || null;
         this.timeoutMs = opts.timeoutMs || 30_000;
-        this.token = null;
-        if (!this.apiKey && !(this.username && this.password)) throw new Error('OpenDBS: give apiKey, or username and password');
+        this.token = opts.token || null;
+        if (opts.ignoreSSL) {
+            process.emitWarning('OpenDBS: ignoreSSL is no longer supported. To trust a self-signed certificate, start Node with NODE_EXTRA_CA_CERTS=<cert.pem>.');
+        }
     }
 
-    async login() {
+    /**
+     * Sign in with the username/password given to the constructor, or with the ones passed here
+     * (they are kept, so the client signs in again when the session expires).
+     * @returns {Promise<{token: string, user: object}>}
+     */
+    async login(username, password, totp) {
+        if (username !== undefined) {
+            this.username = username;
+            this.password = password;
+            if (totp !== undefined) this.totp = totp;
+        }
+        if (!this.username || !this.password) throw new Error('OpenDBS: give apiKey, or username and password');
         let data = await this._raw('POST', '/api/auth/login', { username: this.username, password: this.password }, false);
         if (data.twoFactorRequired) {
             if (!this.totp) throw new OpenDBSError('This account uses two-factor authentication: pass totp', 401, data);
             data = await this._raw('POST', '/api/auth/login/2fa', { challenge: data.challenge, code: String(this.totp) }, false);
         }
         this.token = data.token;
-        return data.user;
+        return data;
     }
+
+    /** Use an existing session token. */
+    setToken(token) { this.token = token; }
 
     /** The member requests currently go to. */
     get url() { return this.urls[this.current]; }
@@ -119,7 +138,7 @@ class OpenDBS {
         try {
             return await this._raw(method, path, body);
         } catch (e) {
-            if (e.status === 401 && !this.apiKey) {
+            if (e.status === 401 && !this.apiKey && this.username && this.password) {
                 await this.login();
                 return this._raw(method, path, body);
             }
@@ -129,7 +148,9 @@ class OpenDBS {
 
     version() { return this.request('GET', '/api/version'); }
     me() { return this.request('GET', '/api/auth/me'); }
-    async listDatabases() { return (await this.request('GET', '/api/databases')).databases; }
+    async listDatabases(includeRacks = false) {
+        return (await this.request('GET', `/api/databases${includeRacks ? '?include_racks=true' : ''}`)).databases;
+    }
     createDatabase(name) { return this.request('POST', '/api/databases', { name }); }
     dropDatabase(name) { return this.request('DELETE', `/api/databases/${enc(name)}`); }
     database(name) { return new Database(this, name); }
@@ -160,7 +181,58 @@ class OpenDBS {
         }
         return this.request('POST', '/api/transactions', { operations: ops });
     }
+
+    // ── 1.0.0 API ──────────────────────────────────────────────────────────
+    // The first published client took the database and rack as arguments.
+    // These methods keep that code working; new code can use database()/rack().
+
+    register(userData) { return this.request('POST', '/api/auth/register', userData); }
+    regenerateApiKey() { return this.request('POST', '/api/auth/regenerate-api-key'); }
+    deleteDatabase(name) { return this.dropDatabase(name); }
+    listRacks(database) { return this.database(database).listRacks(); }
+    /** config = { name, type?: 'sql' | 'nosql', schema? } */
+    createRack(database, config) { return this.request('POST', `/api/databases/${enc(database)}/racks`, config); }
+    deleteRack(database, rack) { return this.database(database).dropRack(rack); }
+    clearRack(database, rack) { return this.database(database).rack(rack).clear(); }
+    /** Returns the server response ({ id } or { ids }). */
+    insert(database, rack, document) { return this.request('POST', `${rackPath(database, rack)}/documents`, document); }
+    /** Equality filters as query parameters, e.g. find('shop', 'users', { city: 'Pune' }). Returns the documents. */
+    async find(database, rack, query = {}, options = {}) {
+        const params = new URLSearchParams(query);
+        if (options.populate) params.append('populate', 'true');
+        const qs = params.toString();
+        return (await this.request('GET', `${rackPath(database, rack)}/documents${qs ? `?${qs}` : ''}`)).results;
+    }
+    async findOne(database, rack, id, options = {}) {
+        const params = new URLSearchParams({ id: String(id) });
+        if (options.populate) params.append('populate', 'true');
+        return (await this.request('GET', `${rackPath(database, rack)}/documents?${params}`)).results?.[0] || null;
+    }
+    update(database, rack, id, updates) { return this.database(database).rack(rack).update(id, updates); }
+    delete(database, rack, id) { return this.database(database).rack(rack).delete(id); }
+    /** Returns the statement results. */
+    async sql(database, query, params) {
+        const data = await this.database(database).sql(query, params);
+        return data.results || data;
+    }
+    getSqlCredentials() { return this.request('POST', '/api/sql/credentials'); }
+    /** queryBody = { query, limit?, skip?, sort? }. Returns the documents. */
+    async search(database, rack, queryBody) { return (await this.request('POST', `${rackPath(database, rack)}/search`, queryBody)).results; }
+    async fuzzySearch(database, rack, field, query) { return (await this.database(database).rack(rack).fuzzySearch(field, query)).results; }
+    async vectorSearch(database, rack, field, vector, k = 5) { return (await this.database(database).rack(rack).vectorSearch(field, vector, k)).results; }
+    async rangeSearch(database, rack, field, min, max) {
+        return (await this.request('POST', `${rackPath(database, rack)}/search/range`, { field, min, max })).results;
+    }
+    async patternSearch(database, rack, field, pattern) {
+        return (await this.request('POST', `${rackPath(database, rack)}/search/pattern`, { field, pattern })).results;
+    }
+    createBackup() { return this.request('POST', '/api/backup/create'); }
+    async listBackups() { return (await this.request('GET', '/api/backup/list')).backups; }
+    restoreBackup(backupName) { return this.request('POST', '/api/backup/restore', { backupName }); }
+    quickBackupRack(database, rack) { return this.request('GET', `/api/backup/quick?database=${enc(database)}&rack=${enc(rack)}`); }
 }
+
+const rackPath = (database, rack) => `/api/databases/${enc(database)}/racks/${enc(rack)}`;
 
 class Database {
     constructor(client, name) { this.client = client; this.name = name; }

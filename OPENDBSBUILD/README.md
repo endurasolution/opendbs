@@ -166,14 +166,14 @@ Each statement is checked against your permissions: SELECT needs read, INSERT / 
 
 ## Client libraries
 
-The drivers live in `drivers/` (no third-party dependencies). Each one:
+The drivers live in `drivers/` (no third-party dependencies). The Node.js client is also on npm: `npm install opendbs`. Each one:
 
 - accepts **several server URLs** and moves to another member when one fails (cluster failover);
 - sends an **`Idempotency-Key`** with every write, so a retry after a network error never applies the write twice.
 
 ```js
-// Node.js — drivers/nodejs
-const { OpenDBS } = require('./drivers/nodejs');
+// Node.js — npm install opendbs (or drivers/nodejs)
+const { OpenDBS } = require('opendbs');
 const db = new OpenDBS({ url: 'http://10.0.0.5:4402,http://10.0.0.6:4402,http://10.0.0.7:4402', apiKey: process.env.OPENDBS_KEY });
 const orders = db.database('shop').rack('orders');
 const id = await orders.insert({ customer: 'c-17', total: 49.9 });

@@ -1,7 +1,11 @@
 export interface OpenDBSOptions {
     /** One server, or several cluster members (array or comma-separated) to fail over between. */
-    url: string | string[];
+    url?: string | string[];
+    /** Same as `url` (the option name used by the 1.0.0 client). */
+    baseURL?: string;
     apiKey?: string;
+    /** An existing session token. */
+    token?: string;
     username?: string;
     password?: string;
     /** 6-digit code when the account uses two-factor authentication. */
@@ -89,15 +93,42 @@ export class Database {
 
 export class OpenDBS {
     constructor(options: OpenDBSOptions);
-    login(): Promise<any>;
+    /** Signs in with the constructor's credentials, or with the ones given here (kept for automatic re-login). */
+    login(username?: string, password?: string, totp?: string): Promise<{ token: string; user: any }>;
+    setToken(token: string): void;
     request(method: string, path: string, body?: any): Promise<any>;
     version(): Promise<{ name: string; version: string; builtAt: string | null; commit: string | null }>;
     me(): Promise<any>;
-    listDatabases(): Promise<string[]>;
+    listDatabases(includeRacks?: boolean): Promise<any[]>;
     createDatabase(name: string): Promise<any>;
     dropDatabase(name: string): Promise<any>;
     database(name: string): Database;
     transaction(ops: TxOperation[] | ((tx: TxBuilder) => void | Promise<void>)): Promise<{ committed: true; txId: string; changes: number; results: Array<{ op: string; rack: string; id: string }> }>;
+
+    // 1.0.0 API: database and rack passed as arguments
+    register(userData: object): Promise<any>;
+    regenerateApiKey(): Promise<{ apiKey: string }>;
+    deleteDatabase(name: string): Promise<any>;
+    listRacks(database: string): Promise<Array<{ name: string; type: 'sql' | 'nosql'; count: number }>>;
+    createRack(database: string, config: { name: string; type?: 'sql' | 'nosql'; schema?: Record<string, ColumnDef> }): Promise<any>;
+    deleteRack(database: string, rack: string): Promise<any>;
+    clearRack(database: string, rack: string): Promise<any>;
+    insert(database: string, rack: string, document: object | object[]): Promise<any>;
+    find(database: string, rack: string, query?: Record<string, string | number | boolean>, options?: { populate?: boolean }): Promise<any[]>;
+    findOne(database: string, rack: string, id: string, options?: { populate?: boolean }): Promise<any>;
+    update(database: string, rack: string, id: string, updates: object): Promise<any>;
+    delete(database: string, rack: string, id: string): Promise<any>;
+    sql(database: string, query: string, params?: unknown[]): Promise<any>;
+    getSqlCredentials(): Promise<any>;
+    search(database: string, rack: string, queryBody: { query: object; limit?: number; skip?: number; sort?: FindOptions['sort'] }): Promise<any[]>;
+    fuzzySearch(database: string, rack: string, field: string, query: string): Promise<any[]>;
+    vectorSearch(database: string, rack: string, field: string, vector: number[], k?: number): Promise<any[]>;
+    rangeSearch(database: string, rack: string, field: string, min: number, max: number): Promise<any[]>;
+    patternSearch(database: string, rack: string, field: string, pattern: string): Promise<any[]>;
+    createBackup(): Promise<any>;
+    listBackups(): Promise<string[]>;
+    restoreBackup(backupName: string): Promise<any>;
+    quickBackupRack(database: string, rack: string): Promise<any>;
 }
 
 export default OpenDBS;
