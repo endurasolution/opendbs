@@ -4,11 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opendbs"
-version = "1.0.1"
-description = "Official Python client for OpenDBS (documents, SQL, aggregation, transactions)"
+version = "1.0.2"
+description = "Official Python client for OpenDBS: documents, SQL, aggregation, transactions, cluster failover"
+readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "CC-BY-NC-4.0" }
+authors = [{ name = "OpenDBS Team" }]
+keywords = ["opendbs", "database", "client", "sql", "nosql"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Database :: Front-Ends",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/endurasolution/opendbs/tree/main/OPENDBSBUILD/drivers/python"
+Repository = "https://github.com/endurasolution/opendbs"
+Issues = "https://github.com/endurasolution/opendbs/issues"
+Changelog = "https://github.com/endurasolution/opendbs/blob/main/OPENDBSBUILD/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["opendbs"]

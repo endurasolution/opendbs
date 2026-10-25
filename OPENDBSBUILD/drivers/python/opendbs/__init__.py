@@ -20,10 +20,10 @@ import ssl
 import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 __all__ = ["OpenDBS", "OpenDBSError", "Database", "Rack", "TxBuilder"]
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 
 class OpenDBSError(Exception):
@@ -40,7 +40,7 @@ def _q(s: str) -> str:
 class OpenDBS:
     def __init__(
         self,
-        url: Union[str, Sequence[str]],
+        url: Union[str, Sequence[str], None] = None,
         api_key: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -48,13 +48,25 @@ class OpenDBS:
         timeout: float = 30.0,
         verify_tls: bool = True,
         failover: float = 20.0,
+        token: Optional[str] = None,
+        ignore_ssl: bool = False,
+        base_url: Optional[str] = None,
     ):
         """url: one server, or several cluster members (list or comma-separated) to fail over between.
 
         failover: seconds to keep trying other members while one is down (covers an election).
+        token: an existing session token. Without api_key, username/password or token,
+        call login(username, password) first.
+        base_url, ignore_ssl: names used by the 1.0.x client for url and verify_tls=False.
         """
-        if not api_key and not (username and password):
-            raise ValueError("give api_key, or username and password")
+        url = url if url is not None else base_url
+        if not url:
+            raise ValueError("url is required")
+        # The 1.0.x client's second positional argument was a session token.
+        if api_key and not api_key.startswith("opendbs_") and api_key.count(".") == 2 and token is None:
+            api_key, token = None, api_key
+        if ignore_ssl:
+            verify_tls = False
         urls = list(url) if isinstance(url, (list, tuple)) else str(url).split(",")
         self._targets: List[Tuple[str, str, Optional[int], str]] = []
         for one in urls:
@@ -67,8 +79,12 @@ class OpenDBS:
         self._timeout = timeout
         self._ctx = ssl.create_default_context() if verify_tls else ssl._create_unverified_context()  # noqa: S323
         self.api_key, self.username, self.password, self.totp = api_key, username, password, totp
-        self.token: Optional[str] = None
+        self.token: Optional[str] = token
         self._conn: Optional[http.client.HTTPConnection] = None
+
+    @property
+    def base_url(self) -> str:
+        return self.url
 
     @property
     def url(self) -> str:
@@ -159,22 +175,34 @@ class OpenDBS:
             if attempt % len(self._targets) == 0:
                 time.sleep(0.4)
 
-    def login(self) -> Any:
+    def login(self, username: Optional[str] = None, password: Optional[str] = None, totp: Optional[str] = None) -> Dict[str, Any]:
+        """Sign in with the constructor's credentials, or with the ones given here (they are kept,
+        so the client signs in again when the session expires). Returns {"token", "user"}."""
+        if username is not None:
+            self.username, self.password = username, password
+            if totp is not None:
+                self.totp = totp
+        if not (self.username and self.password):
+            raise ValueError("give api_key, or username and password")
         data = self._raw("POST", "/api/auth/login", {"username": self.username, "password": self.password}, auth=False)
         if data.get("twoFactorRequired"):
             if not self.totp:
                 raise OpenDBSError("This account uses two-factor authentication: pass totp=", 401, data)
             data = self._raw("POST", "/api/auth/login/2fa", {"challenge": data["challenge"], "code": str(self.totp)}, auth=False)
         self.token = data["token"]
-        return data.get("user")
+        return data
+
+    def set_token(self, token: str) -> None:
+        """Use an existing session token."""
+        self.token = token
 
     def request(self, method: str, path: str, body: Any = None) -> Any:
-        if not self.api_key and not self.token:
+        if not self.api_key and not self.token and self.username and self.password:
             self.login()
         try:
             return self._raw(method, path, body)
         except OpenDBSError as e:
-            if e.status == 401 and not self.api_key:
+            if e.status == 401 and not self.api_key and self.username and self.password:
                 self.login()
                 return self._raw(method, path, body)
             raise
@@ -186,8 +214,8 @@ class OpenDBS:
     def me(self) -> Dict[str, Any]:
         return self.request("GET", "/api/auth/me")
 
-    def list_databases(self) -> List[str]:
-        return self.request("GET", "/api/databases")["databases"]
+    def list_databases(self, include_racks: bool = False) -> List[Any]:
+        return self.request("GET", "/api/databases" + ("?include_racks=true" if include_racks else ""))["databases"]
 
     def create_database(self, name: str) -> Any:
         return self.request("POST", "/api/databases", {"name": name})
@@ -212,6 +240,81 @@ class OpenDBS:
             ops_or_fn(builder)
             ops = builder.ops
         return self.request("POST", "/api/transactions", {"operations": ops})
+
+    # ── 1.0.x API: database and rack passed as arguments ──
+    # The first published client took the database and rack as arguments. These
+    # methods keep that code working; new code can use database() / rack().
+
+    def register(self, user_data: Dict[str, Any]) -> Any:
+        return self._raw("POST", "/api/auth/register", user_data, auth=False)
+
+    def regenerate_api_key(self) -> Any:
+        return self.request("POST", "/api/auth/regenerate-api-key")
+
+    def delete_database(self, name: str) -> Any:
+        return self.drop_database(name)
+
+    def list_racks(self, database: str) -> List[Dict[str, Any]]:
+        return self.database(database).list_racks()
+
+    def create_rack(self, database: str, name: str, type: str = "nosql", schema: Optional[Dict[str, Any]] = None) -> Any:
+        body: Dict[str, Any] = {"name": name, "type": type}
+        if schema:
+            body["schema"] = schema
+        return self.request("POST", f"/api/databases/{_q(database)}/racks", body)
+
+    def delete_rack(self, database: str, rack: str) -> Any:
+        return self.database(database).drop_rack(rack)
+
+    def clear_rack(self, database: str, rack: str) -> Any:
+        return self.database(database).rack(rack).clear()
+
+    def insert(self, database: str, rack: str, document: Any) -> Any:
+        """Returns the server response ({"id": ...} or {"ids": [...]})."""
+        return self.request("POST", f"{_rack_path(database, rack)}/documents", document)
+
+    def find(self, database: str, rack: str, query: Optional[Dict[str, Any]] = None, populate: bool = False) -> List[Dict[str, Any]]:
+        """Equality filters as query parameters, e.g. find("shop", "users", {"city": "Pune"})."""
+        params = {k: (str(v).lower() if isinstance(v, bool) else v) for k, v in (query or {}).items()}
+        if populate:
+            params["populate"] = "true"
+        qs = urlencode(params)
+        return self.request("GET", f"{_rack_path(database, rack)}/documents" + (f"?{qs}" if qs else "")).get("results", [])
+
+    def find_one(self, database: str, rack: str, doc_id: str, populate: bool = False) -> Optional[Dict[str, Any]]:
+        res = self.find(database, rack, {"id": doc_id}, populate)
+        return res[0] if res else None
+
+    def update(self, database: str, rack: str, doc_id: str, updates: Dict[str, Any]) -> Any:
+        return self.database(database).rack(rack).update(doc_id, updates)
+
+    def delete(self, database: str, rack: str, doc_id: str) -> Any:
+        return self.database(database).rack(rack).delete(doc_id)
+
+    def sql(self, database: str, query: str, params: Optional[Sequence[Any]] = None) -> Any:
+        """Returns the statement results."""
+        res = self.database(database).sql(query, params)
+        return res["results"] if isinstance(res, dict) and "results" in res else res
+
+    def search(self, database: str, rack: str, query_body: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """query_body = {"query": {...}, "limit": ..., "skip": ..., "sort": ...}"""
+        return self.request("POST", f"{_rack_path(database, rack)}/search", query_body).get("results", [])
+
+    def fuzzy_search(self, database: str, rack: str, field: str, query: str) -> List[Dict[str, Any]]:
+        return self.database(database).rack(rack).fuzzy_search(field, query).get("results", [])
+
+    def vector_search(self, database: str, rack: str, field: str, vector: Sequence[float], k: int = 5) -> List[Dict[str, Any]]:
+        return self.database(database).rack(rack).vector_search(field, vector, k).get("results", [])
+
+    def create_backup(self) -> Any:
+        return self.request("POST", "/api/backup/create")
+
+    def list_backups(self) -> List[Any]:
+        return self.request("GET", "/api/backup/list").get("backups", [])
+
+
+def _rack_path(database: str, rack: str) -> str:
+    return f"/api/databases/{_q(database)}/racks/{_q(rack)}"
 
 
 class TxBuilder:
@@ -341,6 +444,12 @@ class Rack:
     def drop_index(self, name: Union[str, Sequence[str]]) -> Any:
         n = name if isinstance(name, str) else "+".join(name)
         return self.client.request("DELETE", self._p(f"/indexes/{_q(n)}"))
+
+    def indexes(self) -> List[Dict[str, Any]]:
+        return self.client.request("GET", self._p("/indexes"))["details"]
+
+    def fuzzy_search(self, field: str, query: str, threshold: float = 0.6) -> Dict[str, Any]:
+        return self.client.request("POST", self._p("/search/fuzzy"), {"field": field, "query": query, "threshold": threshold})
 
     def vector_search(self, field: str, vector: Sequence[float], k: int = 10) -> Dict[str, Any]:
         return self.client.request("POST", self._p("/search/vector"), {"field": field, "vector": list(vector), "k": k})

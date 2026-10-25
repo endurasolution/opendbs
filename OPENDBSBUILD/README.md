@@ -166,7 +166,7 @@ Each statement is checked against your permissions: SELECT needs read, INSERT / 
 
 ## Client libraries
 
-The drivers live in `drivers/` (no third-party dependencies). The Node.js client is also on npm (`npm install opendbs`) and the Dart / Flutter client on pub.dev (`opendbs`). Each one:
+The drivers live in `drivers/` (no third-party dependencies). They are also published as `opendbs` on npm (`npm install opendbs`), PyPI (`pip install opendbs`) and pub.dev (Dart / Flutter). Each one:
 
 - accepts **several server URLs** and moves to another member when one fails (cluster failover);
 - sends an **`Idempotency-Key`** with every write, so a retry after a network error never applies the write twice.
@@ -182,7 +182,7 @@ const rows = await db.database('shop').sql('SELECT status, COUNT(*) AS n FROM or
 ```
 
 ```python
-# Python — drivers/python (standard library only)
+# Python — pip install opendbs (standard library only)
 from opendbs import OpenDBS
 db = OpenDBS(["http://10.0.0.5:4402", "http://10.0.0.6:4402"], api_key="…")
 orders = db.database("shop").rack("orders")

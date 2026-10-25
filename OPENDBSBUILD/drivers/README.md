@@ -9,7 +9,7 @@ databases and IP addresses) or with a **username/password** (plus a 2FA code if 
 | | Node.js | Python | PHP | Dart / Flutter |
 |---|---|---|---|---|
 | Folder | `nodejs/` | `python/` | `php/` | `flutter/` |
-| Install | `npm install opendbs` (or `npm install ./drivers/nodejs`) | `pip install ./drivers/python` | `composer require opendbs/client` (path repo) or `require 'drivers/php/src/OpenDBS.php'` | `opendbs: ^1.0.1` in `pubspec.yaml` |
+| Install | `npm install opendbs` (or `npm install ./drivers/nodejs`) | `pip install opendbs` (or `pip install ./drivers/python`) | `composer require opendbs/client` (path repo) or `require 'drivers/php/src/OpenDBS.php'` | `opendbs: ^1.0.1` in `pubspec.yaml` |
 | Needs | Node 18+ | Python 3.8+ (stdlib only) | PHP 8.0+ with curl, json | Dart 3 (Flutter on any platform, including web) |
 
 ## Node.js
