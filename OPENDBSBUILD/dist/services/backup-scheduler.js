@@ -35,61 +35,89 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BackupScheduler = void 0;
 const cron = __importStar(require("node-cron"));
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+/**
+ * Runs scheduled backups. Reads its settings from the BackupService, so a
+ * change saved in the admin panel only needs reschedule() -- no restart.
+ */
 class BackupScheduler {
-    config;
     backupService;
     dataPath;
     task;
-    constructor(config, backupService, dataPath) {
-        this.config = config;
+    running = false;
+    lastRun = null;
+    // The first parameter is kept for call-site compatibility; settings come from the service.
+    constructor(_config, backupService, dataPath) {
         this.backupService = backupService;
         this.dataPath = dataPath;
     }
-    start() {
-        if (!this.config.enabled) {
-            console.log('📦 Scheduled backups: DISABLED');
+    start(quiet = false) {
+        const cfg = this.backupService.getConfig();
+        if (!cfg.enabled) {
+            if (!quiet)
+                console.log('📦 Scheduled backups: DISABLED');
             return;
         }
-        // Validate cron expression
-        if (!cron.validate(this.config.schedule)) {
-            console.error(`❌ Invalid backup schedule: ${this.config.schedule}`);
-            console.log('📦 Scheduled backups: DISABLED (invalid schedule)');
+        if (!cron.validate(cfg.schedule)) {
+            console.error(`❌ Invalid backup schedule: ${cfg.schedule}`);
             return;
         }
-        console.log(`📦 Scheduled backups: ENABLED`);
-        console.log(`   Schedule: ${this.config.schedule}`);
-        console.log(`   Type: ${this.config.type}`);
-        console.log(`   Retention: ${this.config.retentionDays} days`);
-        this.task = cron.schedule(this.config.schedule, async () => {
-            try {
-                console.log('🔄 Starting scheduled backup...');
-                // Get all databases
-                const fs = await Promise.resolve().then(() => __importStar(require('fs')));
-                const path = await Promise.resolve().then(() => __importStar(require('path')));
-                const databases = [];
-                if (fs.existsSync(this.dataPath)) {
-                    const items = fs.readdirSync(this.dataPath);
-                    databases.push(...items.filter(item => {
-                        const itemPath = path.join(this.dataPath, item);
-                        return fs.statSync(itemPath).isDirectory();
-                    }));
-                }
-                if (databases.length === 0) {
-                    console.log('⚠️  No databases to backup');
-                    return;
-                }
-                const backupName = await this.backupService.createBackup(this.dataPath, databases);
-                console.log(`✅ Scheduled backup completed: ${backupName}`);
-            }
-            catch (error) {
-                console.error('❌ Scheduled backup failed:', error);
-            }
+        if (!quiet) {
+            console.log(`📦 Scheduled backups: ENABLED`);
+            console.log(`   Schedule: ${cfg.schedule}`);
+            console.log(`   Type: ${cfg.type}`);
+            console.log(`   Retention: ${cfg.retentionDays} days`);
+        }
+        this.task = cron.schedule(cfg.schedule, () => {
+            this.runNow('schedule').catch(() => undefined);
         });
     }
-    stop() {
+    /** Applies the service's current settings (call after reconfigure). */
+    reschedule() {
+        this.stop(true);
+        this.start(true);
+    }
+    async runNow(trigger = 'manual') {
+        if (this.running)
+            throw new Error('A backup is already running');
+        this.running = true;
+        try {
+            const databases = fs.existsSync(this.dataPath)
+                ? fs.readdirSync(this.dataPath).filter((item) => fs.statSync(path.join(this.dataPath, item)).isDirectory())
+                : [];
+            if (databases.length === 0)
+                throw new Error('No databases to backup');
+            const backupName = await this.backupService.createBackup(this.dataPath, databases);
+            this.lastRun = { at: new Date().toISOString(), ok: true, backupName, trigger };
+            console.log(`✅ ${trigger === 'schedule' ? 'Scheduled' : 'Manual'} backup completed: ${backupName}`);
+        }
+        catch (error) {
+            this.lastRun = { at: new Date().toISOString(), ok: false, error: error?.message ?? String(error), trigger };
+            console.error('❌ Backup failed:', error);
+        }
+        finally {
+            this.running = false;
+        }
+        return this.lastRun;
+    }
+    status() {
+        const cfg = this.backupService.getConfig();
+        let nextRun = null;
+        try {
+            const d = this.task?.getNextRun();
+            nextRun = d ? d.toISOString() : null;
+        }
+        catch { /* not scheduled */ }
+        return { enabled: cfg.enabled, scheduled: Boolean(this.task), nextRun, lastRun: this.lastRun, running: this.running };
+    }
+    stop(quiet = false) {
         if (this.task) {
             this.task.stop();
-            console.log('📦 Scheduled backups: STOPPED');
+            this.task.destroy?.();
+            this.task = undefined;
+            if (!quiet)
+                console.log('📦 Scheduled backups: STOPPED');
         }
     }
 }

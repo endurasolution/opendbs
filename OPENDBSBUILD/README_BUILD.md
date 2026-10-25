@@ -27,18 +27,22 @@ This is a production-ready build of OpenDBS.
 
 ## Server will run on:
 - Port: 4402 (configurable in .env)
-- Default admin credentials:
-  - Username: admin
-  - Password: admin123
-  - **⚠️ CHANGE THESE IMMEDIATELY IN PRODUCTION!**
+- Web UI: http://localhost:4402/web/ (WEB_INTERFACE_ENABLED=true)
+- Admin panel: http://localhost:4402/admin/ (ADMIN_PANEL_ENABLED=true)
+- First start creates user `admin` with the password from ADMIN_PASSWORD,
+  or a random one printed once to the console.
+- Production refuses to start without a strong JWT_SECRET (32+ chars).
 
 ## Documentation
-See QUICKSTART.md for complete API documentation.
+- README.md — overview, API, SQL, drivers, configuration
+- docs/ADMIN_GUIDE.md — running OpenDBS: production setup, backups, cluster, sharding, security, upgrades
+- SECURITY.md, CHANGELOG.md — security model and release notes
+- QUICKSTART.md — API walkthrough with curl examples
 
 ## License
 See LICENSE.md - Non-commercial use only with attribution required.
 
 ---
 
-Built: 2026-04-20T17:23:57.727Z
-Version: 0.1.0
+Built: 2026-10-25T10:44:59.006Z
+Version: 1.0.1

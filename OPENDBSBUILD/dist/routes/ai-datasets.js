@@ -42,9 +42,9 @@ function createAiDatasetRoutes(authService, engine) {
             ],
         }, async (request, reply) => {
             const { database, name } = request.params;
-            const { versionTag } = request.body;
-            if (!versionTag) {
-                return reply.status(400).send({ error: 'versionTag is required (e.g., v1)' });
+            const { versionTag } = (request.body ?? {});
+            if (typeof versionTag !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(versionTag)) {
+                return reply.status(400).send({ error: 'versionTag is required (letters, numbers, _ or -, e.g. v1)' });
             }
             const targetName = `${name}_${versionTag}`;
             try {
@@ -86,7 +86,7 @@ function createAiDatasetRoutes(authService, engine) {
                 });
             }
             catch (e) {
-                return reply.status(404).send({ error: e.message });
+                return reply.status(/not found/.test(e.message) ? 404 : 400).send({ error: e.message });
             }
         });
         /**
@@ -101,9 +101,7 @@ function createAiDatasetRoutes(authService, engine) {
         }, async (request, reply) => {
             const { database, name } = request.params;
             // Get all documents (empty query match all)
-            const results = engine.find(database, name, '{}');
-            const parsedResults = results.map(r => JSON.parse(r));
-            return reply.send(parsedResults);
+            return reply.send(engine.query(database, name, {}).results);
         });
     };
 }

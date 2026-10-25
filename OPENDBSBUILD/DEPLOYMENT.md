@@ -1,5 +1,8 @@
 # OpenDBS Deployment Guide
 
+> The complete guide — production checklist, HTTPS, backups, cluster, sharding,
+> hardening and upgrades — is **docs/ADMIN_GUIDE.md**. This page is a short summary.
+
 ## Production Deployment Checklist
 
 ### 1. Environment Setup

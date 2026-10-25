@@ -1,0 +1,15 @@
+{
+    "name": "opendbs/client",
+    "description": "Official PHP client for OpenDBS (documents, SQL, aggregation, transactions)",
+    "type": "library",
+    "license": "CC-BY-NC-4.0",
+    "version": "1.0.1",
+    "require": {
+        "php": ">=8.0",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "files": ["src/OpenDBS.php"]
+    }
+}

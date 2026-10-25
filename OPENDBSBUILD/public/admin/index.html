@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>OpenDBS Admin</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <!-- Login -->
+    <section id="loginView" class="login-wrap" hidden>
+        <form id="loginForm" class="login-card" autocomplete="on">
+            <div class="brand brand-lg"><span class="brand-mark">◆</span> OpenDBS <span class="brand-tag">Admin</span></div>
+            <div id="loginPasswordStep" class="stack">
+                <p class="muted">Sign in with an administrator account.</p>
+                <label>Username<input id="loginUser" name="username" autocomplete="username" maxlength="64"></label>
+                <label>Password<input id="loginPass" name="password" type="password" autocomplete="current-password" maxlength="256"></label>
+                <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+            </div>
+            <div id="loginCodeStep" class="stack" hidden>
+                <p class="muted">Enter the 6-digit code from your authenticator app, or one of your recovery codes.</p>
+                <label>Authentication code<input id="loginCode" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="20"></label>
+                <button type="submit" class="btn btn-primary btn-block">Verify</button>
+                <button type="button" id="loginBack" class="btn btn-ghost btn-block">Use a different account</button>
+            </div>
+            <p id="loginError" class="error" role="alert"></p>
+            <p id="loginVersion" class="muted small center"></p>
+        </form>
+    </section>
+
+    <!-- App -->
+    <div id="appView" class="layout" hidden>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="brand"><span class="brand-mark">◆</span> OpenDBS <span class="brand-tag">Admin</span></div>
+                <button id="menuBtn" class="btn btn-ghost menu-btn" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="sidebarBody">☰</button>
+            </div>
+            <div class="sidebar-body" id="sidebarBody">
+                <nav id="nav">
+                    <span class="nav-label">Data</span>
+                    <a href="#overview" data-view="overview">Overview</a>
+                    <a href="#data" data-view="data">Databases</a>
+                    <a href="#sql" data-view="sql">SQL console</a>
+                    <a href="#backups" data-view="backups">Backups</a>
+                    <a href="#cluster" data-view="cluster">Cluster</a>
+                    <a href="#sharding" data-view="sharding">Sharding</a>
+                    <span class="nav-label">Access</span>
+                    <a href="#users" data-view="users">Users</a>
+                    <a href="#keys" data-view="keys">API keys</a>
+                    <a href="#audit" data-view="audit">Audit log</a>
+                    <span class="nav-label">Developers</span>
+                    <a href="#docs" data-view="docs">API docs</a>
+                    <a href="#playground" data-view="playground">Playground</a>
+                    <span class="nav-label">System</span>
+                    <a href="#speed" data-view="speed">Speed test</a>
+                    <a href="#settings" data-view="settings">Settings</a>
+                </nav>
+                <div class="sidebar-foot">
+                    <div id="whoami" class="muted small"></div>
+                    <div id="appVersion" class="muted small"></div>
+                    <div class="row gap-s">
+                        <button id="themeBtn" class="btn btn-ghost btn-sm" type="button" title="Toggle theme">◐ Theme</button>
+                        <button id="logoutBtn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        <main id="main" class="main" tabindex="-1"></main>
+    </div>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <dialog id="dialog" class="dialog"></dialog>
+
+    <script src="api-docs.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

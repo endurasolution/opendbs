@@ -1,0 +1,11 @@
+{
+  "name": "opendbs-client",
+  "version": "1.0.1",
+  "description": "Official Node.js client for OpenDBS (documents, SQL, aggregation, transactions)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": ["index.js", "index.d.ts", "README.md"],
+  "engines": { "node": ">=18" },
+  "keywords": ["opendbs", "database", "client", "sql", "nosql"],
+  "license": "CC-BY-NC-4.0"
+}

@@ -5,6 +5,23 @@ const app = {
     currentRack: null,
     theme: localStorage.getItem('opendbs_theme') || 'light',
     editor: null,
+    _docs: [],
+
+    // --- Escaping (everything from the server goes through these before
+    // being placed into an HTML string) ---
+    esc(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    // A JS string literal safe to embed inside an HTML attribute (onclick="...").
+    jsArg(value) {
+        return this.esc(JSON.stringify(String(value ?? '')));
+    },
 
     // --- Permissions ---
     can(action, dbName = null) {
@@ -143,7 +160,32 @@ const app = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
-            const data = await res.json();
+            let data = await res.json();
+
+            // Two-factor: the password was right; exchange the challenge plus a code for a session.
+            if (res.ok && data.twoFactorRequired) {
+                const { value: code } = await Swal.fire({
+                    title: 'Two-factor authentication',
+                    text: 'Enter the 6-digit code from your authenticator app, or a recovery code.',
+                    input: 'text',
+                    inputAttributes: { autocomplete: 'one-time-code', inputmode: 'numeric', maxlength: 20 },
+                    showCancelButton: true,
+                    confirmButtonText: 'Verify',
+                    background: this.theme === 'dark' ? '#1a1d29' : '#fff',
+                    color: this.theme === 'dark' ? '#e0e0e0' : '#333',
+                });
+                if (!code) return;
+                const res2 = await fetch('/api/auth/login/2fa', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ challenge: data.challenge, code: code.trim() })
+                });
+                data = await res2.json();
+                if (!res2.ok) {
+                    this.showErrorLegacy(data.error || 'Verification failed');
+                    return;
+                }
+            }
 
             if (res.ok) {
                 localStorage.setItem('opendbs_token', data.token);
@@ -339,9 +381,9 @@ const app = {
             for (const [key, val] of Object.entries(env)) {
                 html += `
                     <div class="mb-3 row">
-                        <label class="col-sm-3 col-form-label fw-medium text-muted">${key}</label>
+                        <label class="col-sm-3 col-form-label fw-medium text-muted">${this.esc(key)}</label>
                         <div class="col-sm-9">
-                            <input type="text" class="form-control" name="${key}" value="${val}">
+                            <input type="text" class="form-control" name="${this.esc(key)}" value="${this.esc(val)}">
                         </div>
                     </div>
                 `;
@@ -1199,22 +1241,124 @@ const app = {
     createRackModal(dbName) {
         document.getElementById('newRackDbName').value = dbName;
         document.getElementById('newRackName').value = '';
+        document.getElementById('newRackType').value = 'nosql';
+        const rows = document.getElementById('sqlSchemaRows');
+        rows.textContent = '';
+        this.addSchemaRow({ name: 'name', type: 'string', required: true });
+        this.addSchemaRow({ name: 'created_at', type: 'date' });
+        this.toggleRackSchema();
         const modal = new bootstrap.Modal(document.getElementById('createRackModal'));
         modal.show();
     },
 
+    toggleRackSchema() {
+        const isSql = document.getElementById('newRackType').value === 'sql';
+        document.getElementById('sqlSchemaSection').classList.toggle('d-none', !isSql);
+        document.getElementById('nosqlHint').classList.toggle('d-none', isSql);
+    },
+
+    // Builds one column row with DOM APIs (no HTML strings).
+    addSchemaRow(col = {}) {
+        const types = ['string', 'integer', 'number', 'boolean', 'date', 'array', 'object'];
+        const tr = document.createElement('tr');
+        const cell = (child, cls) => { const td = document.createElement('td'); if (cls) td.className = cls; td.appendChild(child); tr.appendChild(td); };
+
+        const name = document.createElement('input');
+        name.className = 'form-control form-control-sm font-monospace schema-name';
+        name.placeholder = 'column_name';
+        name.maxLength = 64;
+        name.value = col.name || '';
+        cell(name);
+
+        const type = document.createElement('select');
+        type.className = 'form-select form-select-sm schema-type';
+        for (const t of types) {
+            const o = document.createElement('option');
+            o.value = t; o.textContent = t; o.selected = t === (col.type || 'string');
+            type.appendChild(o);
+        }
+        cell(type);
+
+        for (const [cls, checked] of [['schema-required', col.required], ['schema-unique', col.unique]]) {
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = `form-check-input ${cls}`;
+            cb.checked = Boolean(checked);
+            cell(cb, 'text-center');
+        }
+
+        const def = document.createElement('input');
+        def.className = 'form-control form-control-sm schema-default';
+        def.placeholder = 'optional';
+        cell(def);
+
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'btn btn-sm btn-outline-danger';
+        rm.textContent = '✕';
+        rm.title = 'Remove column';
+        rm.addEventListener('click', () => tr.remove());
+        cell(rm);
+
+        document.getElementById('sqlSchemaRows').appendChild(tr);
+    },
+
+    collectRackSchema() {
+        const schema = {};
+        for (const tr of document.querySelectorAll('#sqlSchemaRows tr')) {
+            const name = tr.querySelector('.schema-name').value.trim();
+            if (!name) continue;
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(name)) throw new Error(`Invalid column name "${name}"`);
+            if (name === 'id') throw new Error('"id" is reserved — it is added automatically');
+            if (schema[name]) throw new Error(`Duplicate column "${name}"`);
+            const type = tr.querySelector('.schema-type').value;
+            const col = { type };
+            if (tr.querySelector('.schema-required').checked) col.required = true;
+            if (tr.querySelector('.schema-unique').checked) col.unique = true;
+            const raw = tr.querySelector('.schema-default').value.trim();
+            if (raw !== '') {
+                if (type === 'integer' || type === 'number') {
+                    col.defaultValue = Number(raw);
+                    if (!Number.isFinite(col.defaultValue)) throw new Error(`Default for "${name}" must be a number`);
+                } else if (type === 'boolean') {
+                    col.defaultValue = /^(true|1|yes)$/i.test(raw);
+                } else if (type === 'object' || type === 'array') {
+                    try { col.defaultValue = JSON.parse(raw); } catch { throw new Error(`Default for "${name}" must be valid JSON`); }
+                } else {
+                    col.defaultValue = raw;
+                }
+            }
+            schema[name] = col;
+        }
+        return schema;
+    },
+
     async createRack() {
         const dbName = document.getElementById('newRackDbName').value;
-        const rackName = document.getElementById('newRackName').value;
+        const rackName = document.getElementById('newRackName').value.trim();
         const rackType = document.getElementById('newRackType').value;
 
         if (!rackName) return;
+
+        const payload = { name: rackName, type: rackType };
+        if (rackType === 'sql') {
+            try {
+                payload.schema = this.collectRackSchema();
+            } catch (e) {
+                await this.showError('Invalid columns', e.message);
+                return;
+            }
+            if (Object.keys(payload.schema).length === 0) {
+                await this.showError('Columns required', 'Add at least one column for a SQL rack.');
+                return;
+            }
+        }
 
         try {
             const res = await this.fetch(`/api/databases/${dbName}/racks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: rackName, type: rackType })
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
@@ -1270,15 +1414,15 @@ const app = {
                                 <tr>
                                     <td class="ps-3">
                                         <i class="bi bi-lightning-charge text-warning me-2"></i>
-                                        <span class="font-monospace">${idx}</span>
+                                        <span class="font-monospace">${this.esc(idx)}</span>
                                     </td>
                                     <td class="small text-muted">Indexed Field</td>
                                     <td class="text-end pe-3">
-                                        <button class="btn btn-sm btn-icon btn-ghost-info me-1" onclick="app.viewIndexedData('${dbName}', '${rackName}', '${idx}')" title="View Indexed Data">
+                                        <button class="btn btn-sm btn-icon btn-ghost-info me-1" onclick="app.viewIndexedData(${this.jsArg(dbName)}, ${this.jsArg(rackName)}, ${this.jsArg(idx)})" title="View Indexed Data">
                                             <i class="bi bi-eye"></i>
                                         </button>
                                         ${canDelete ? `
-                                        <button class="btn btn-sm btn-icon btn-ghost-danger" onclick="app.deleteIndex('${dbName}', '${rackName}', '${idx}')" title="Delete Index">
+                                        <button class="btn btn-sm btn-icon btn-ghost-danger" onclick="app.deleteIndex(${this.jsArg(dbName)}, ${this.jsArg(rackName)}, ${this.jsArg(idx)})" title="Delete Index">
                                             <i class="bi bi-trash"></i>
                                         </button>` : ''}
                                     </td>
@@ -1319,24 +1463,27 @@ const app = {
                 console.error('Failed to load indexes', e);
             }
 
+            // Documents are referenced by position instead of being serialized
+            // into onclick attributes (which allowed stored XSS via field values).
+            this._docs = docs;
             let rows = '';
-            docs.forEach(doc => {
+            docs.forEach((doc, i) => {
                 const dataStr = JSON.stringify(doc.data || doc).substring(0, 80) + '...';
                 rows += `
                     <tr>
-                        <td class="font-monospace text-primary" style="width:200px">${doc.id}</td>
-                        <td class="small text-muted text-truncate" style="max-width:300px">${dataStr}</td>
+                        <td class="font-monospace text-primary" style="width:200px">${this.esc(doc.id)}</td>
+                        <td class="small text-muted text-truncate" style="max-width:300px">${this.esc(dataStr)}</td>
                         <td class="text-end">
                              ${canRead && !canWrite ? `
-                            <button class="btn btn-sm btn-icon btn-ghost-info" onclick='app.viewDocument(${JSON.stringify(doc)})' title="View (Read-Only)">
+                            <button class="btn btn-sm btn-icon btn-ghost-info" onclick="app.viewDocument(app._docs[${i}])" title="View (Read-Only)">
                                 <i class="bi bi-eye"></i>
                             </button>` : ''}
                              ${canWrite ? `
-                            <button class="btn btn-sm btn-icon btn-ghost-secondary" onclick='app.editDocument(${JSON.stringify(doc)})' title="Edit">
+                            <button class="btn btn-sm btn-icon btn-ghost-secondary" onclick="app.editDocument(app._docs[${i}])" title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </button>` : ''}
                             ${canDelete ? `
-                            <button class="btn btn-sm btn-icon btn-ghost-danger" onclick="app.deleteDocument('${doc.id}')" title="Delete">
+                            <button class="btn btn-sm btn-icon btn-ghost-danger" onclick="app.deleteDocument(${this.jsArg(doc.id)})" title="Delete">
                                 <i class="bi bi-trash"></i>
                             </button>` : ''}
                         </td>
@@ -1359,7 +1506,7 @@ const app = {
                     <h4 class="mb-0">${rackName}</h4>
                     <div class="d-flex align-items-center">
                          <div class="input-group input-group-sm me-2" style="width:250px;">
-                            <input type="text" class="form-control bg-card text-main border-secondary" id="searchRackInput" placeholder="Search ID or JSON..." value='${searchQueryStr}'>
+                            <input type="text" class="form-control bg-card text-main border-secondary" id="searchRackInput" placeholder="Search ID or JSON..." value="${this.esc(searchQueryStr)}">
                             <button class="btn btn-outline-secondary" onclick="app.triggerSearch()">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -1401,7 +1548,7 @@ const app = {
             }
 
         } catch (e) {
-            main.innerHTML = `<div class="alert alert-danger">Error loading documents: ${e.message}</div>`;
+            main.innerHTML = `<div class="alert alert-danger">Error loading documents: ${this.esc(e.message)}</div>`;
         }
     },
 
@@ -1536,27 +1683,28 @@ const app = {
         const disabledAttr = readOnly ? ' disabled' : '';
         const readonlyAttr = readOnly ? ' readonly' : '';
 
+        const k = this.esc(key);
         let html = '<tr>';
-        html += `<td><input type="text" class="form-control form-control-sm table-field-name" value="${key}"${readonlyAttr}></td>`;
+        html += `<td><input type="text" class="form-control form-control-sm table-field-name" value="${k}"${readonlyAttr}></td>`;
         html += '<td>';
 
         if (isForeignKey && racks.length > 0 && !readOnly) {
             // Foreign key field with autocomplete
             html += `<div class="input-group input-group-sm">`;
-            html += `<input type="text" class="form-control table-input" data-field="${key}" value="${value || ''}" list="fk-list-${key}">`;
-            html += `<button class="btn btn-outline-secondary btn-sm" onclick="app.browseRackForFK('${key}')" title="Browse related rack">`;
+            html += `<input type="text" class="form-control table-input" data-field="${k}" value="${this.esc(value || '')}" list="fk-list-${k}">`;
+            html += `<button class="btn btn-outline-secondary btn-sm" onclick="app.browseRackForFK(${this.jsArg(key)})" title="Browse related rack">`;
             html += `<i class="bi bi-search"></i></button>`;
             html += `</div>`;
-            html += `<datalist id="fk-list-${key}">`;
+            html += `<datalist id="fk-list-${k}">`;
             racks.forEach(r => {
-                html += `<option value="${key.replace('_id', '')}-rack:${r}">`;
+                html += `<option value="${this.esc(key.replace('_id', ''))}-rack:${this.esc(r)}">`;
             });
             html += `</datalist>`;
             html += `<small class="text-muted"><i class="bi bi-link-45deg"></i> Foreign Key</small>`;
         } else if (typeof value === 'object' && value !== null) {
-            html += `<textarea class="form-control form-control-sm table-input" data-field="${key}" rows="3"${readonlyAttr}>${JSON.stringify(value, null, 2)}</textarea>`;
+            html += `<textarea class="form-control form-control-sm table-input" data-field="${k}" rows="3"${readonlyAttr}>${this.esc(JSON.stringify(value, null, 2))}</textarea>`;
         } else {
-            html += `<input type="text" class="form-control form-control-sm table-input" data-field="${key}" value="${value || ''}"${readonlyAttr}>`;
+            html += `<input type="text" class="form-control form-control-sm table-input" data-field="${k}" value="${this.esc(value ?? '')}"${readonlyAttr}>`;
         }
 
         html += '</td>';
@@ -1774,27 +1922,27 @@ const app = {
 
                 tableRows += `
                     <tr>
-                        <td class="font-monospace small">${doc.id}</td>
-                        <td class="text-primary fw-bold">${valueStr}</td>
-                        <td class="small text-muted text-truncate" style="max-width: 300px;">${JSON.stringify(data).substring(0, 100)}...</td>
+                        <td class="font-monospace small">${this.esc(doc.id)}</td>
+                        <td class="text-primary fw-bold">${this.esc(valueStr)}</td>
+                        <td class="small text-muted text-truncate" style="max-width: 300px;">${this.esc(JSON.stringify(data).substring(0, 100))}...</td>
                     </tr>
                 `;
             });
 
             await Swal.fire({
-                title: `Indexed Data: ${fieldName}`,
+                title: `Indexed Data: ${this.esc(fieldName)}`,
                 html: `
                     <div class="text-start">
                         <p class="small text-muted">
                             <i class="bi bi-info-circle me-1"></i>
-                            Showing ${sortedDocs.length} documents sorted by <strong>${fieldName}</strong>
+                            Showing ${sortedDocs.length} documents sorted by <strong>${this.esc(fieldName)}</strong>
                         </p>
                         <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                             <table class="table table-sm table-hover">
                                 <thead class="sticky-top bg-light">
                                     <tr>
                                         <th>Document ID</th>
-                                        <th><i class="bi bi-lightning-charge text-warning"></i> ${fieldName}</th>
+                                        <th><i class="bi bi-lightning-charge text-warning"></i> ${this.esc(fieldName)}</th>
                                         <th>Preview</th>
                                     </tr>
                                 </thead>
@@ -1936,14 +2084,16 @@ const app = {
     },
 
     showChangePassword() {
+        document.getElementById('currentPasswordInput').value = '';
         document.getElementById('newPasswordInput').value = '';
         new bootstrap.Modal(document.getElementById('changePasswordModal')).show();
     },
 
     async changePassword() {
+        const currentPassword = document.getElementById('currentPasswordInput').value;
         const password = document.getElementById('newPasswordInput').value;
-        if (!password || password.length < 6) {
-            await this.showWarning('Invalid Password', 'Password must be at least 6 characters');
+        if (!password || password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+            await this.showWarning('Invalid Password', 'Use at least 8 characters with a letter and a digit');
             return;
         }
 
@@ -1951,10 +2101,16 @@ const app = {
             const res = await this.fetch('/api/auth/me/password', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
+                body: JSON.stringify({ currentPassword, password })
             });
 
             if (res.ok) {
+                // The server revokes old sessions and returns a fresh token for this one.
+                const data = await res.json();
+                if (data.token) {
+                    this.token = data.token;
+                    localStorage.setItem('opendbs_token', data.token);
+                }
                 bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
                 await this.showSuccess('Success', 'Password updated successfully');
             } else {

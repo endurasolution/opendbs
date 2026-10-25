@@ -3,3 +3,9 @@ node_modules/
 data/
 backups/
 *.log
+*.tmp
+# Encryption key: never commit it; keep a safe copy elsewhere
+opendbs.key
+*.key
+# Old build archives
+*.zip

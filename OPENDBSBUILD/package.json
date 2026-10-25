@@ -1,12 +1,12 @@
 {
   "name": "opendbs",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "OpenDBS - High-performance database with Node.js API and Rust storage engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "start": "node dist/index.js",
-    "start:prod": "NODE_ENV=production node dist/index.js"
+    "start:prod": "node -e \"process.env.NODE_ENV='production';require('./dist/index.js')\""
   },
   "keywords": [
     "database",
@@ -22,17 +22,13 @@
   "license": "CC-BY-NC-4.0",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",
-    "@fastify/cors": "^9.0.1",
+    "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^12.0.1",
-    "@fastify/jwt": "^8.0.1",
-    "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.0.1",
-    "@fastify/static": "^9.0.0",
-    "adm-zip": "^0.5.16",
+    "@fastify/static": "^10.1.7",
     "archiver": "^7.0.1",
-    "basic-ftp": "^5.1.0",
+    "basic-ftp": "^6.2.3",
     "bcrypt": "^6.0.0",
-    "crypto": "^1.0.1",
     "dotenv": "^16.4.1",
     "fastify": "^5.1.0",
     "jsonwebtoken": "^9.0.3",
@@ -41,8 +37,7 @@
     "node-cron": "^4.2.1",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
-    "sql-query-identifier": "^2.9.0",
-    "zod": "^3.22.4",
+    "qrcode": "^1.5.4",
     "@napi-rs/cli": "^2.18.4"
   },
   "devDependencies": {},
@@ -52,9 +47,11 @@
       "defaults": true,
       "additional": [
         "x86_64-pc-windows-msvc",
+        "x86_64-pc-windows-gnu",
         "x86_64-apple-darwin",
         "x86_64-unknown-linux-gnu"
       ]
     }
-  }
+  },
+  "_comment_rust_build_windows": "On Windows, building against the MSVC toolchain fails with 'libnode.dll not found' in napi-build. Fix: install the GNU toolchain + a MinGW/MSYS2 gcc, then run `rustup override set stable-x86_64-pc-windows-gnu` inside rust-engine/ once. `npm run build:rust` then produces opendbs-engine.win32-x64-msvc.node despite using the GNU toolchain -- that's just napi-rs's own target-detection naming, the binary is correct and loads fine."
 }
