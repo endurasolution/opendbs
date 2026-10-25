@@ -11,7 +11,7 @@ OpenDBS is a document **and** SQL database server written in TypeScript (Node.js
 - **Replication with automatic failover** and **sharding** across several servers, built in
 - **Search**: indexes, full-text / fuzzy search, vector (nearest-neighbour) search, aggregation pipelines
 - **An admin panel** for databases, users, API keys, backups, cluster and shards
-- **Client libraries** for Node.js, Python and PHP (with cluster failover and safe retries)
+- **Client libraries** for Node.js, Python, PHP and Dart / Flutter (with cluster failover and safe retries)
 
 > Version **1.0.1** is the first stable release. See [CHANGELOG.md](CHANGELOG.md) and [SECURITY.md](SECURITY.md).
 
@@ -166,7 +166,7 @@ Each statement is checked against your permissions: SELECT needs read, INSERT / 
 
 ## Client libraries
 
-The drivers live in `drivers/` (no third-party dependencies). The Node.js client is also on npm: `npm install opendbs`. Each one:
+The drivers live in `drivers/` (no third-party dependencies). The Node.js client is also on npm (`npm install opendbs`) and the Dart / Flutter client on pub.dev (`opendbs`). Each one:
 
 - accepts **several server URLs** and moves to another member when one fails (cluster failover);
 - sends an **`Idempotency-Key`** with every write, so a retry after a network error never applies the write twice.
@@ -194,6 +194,12 @@ print(orders.find({"total": {"$gte": 20}}, limit=10))
 // PHP 8 — drivers/php (curl)
 $db = new OpenDBS\Client('http://10.0.0.5:4402,http://10.0.0.6:4402', ['apiKey' => getenv('OPENDBS_KEY')]);
 $db->database('shop')->rack('orders')->insert(['customer' => 'c-17', 'total' => 49.9]);
+```
+
+```dart
+// Dart / Flutter — pub.dev: opendbs (drivers/flutter)
+final db = OpenDBS.cluster(['http://10.0.0.5:4402', 'http://10.0.0.6:4402'], apiKey: '…');
+await db.database('shop').rack('orders').insert({'customer': 'c-17', 'total': 49.9});
 ```
 
 ---

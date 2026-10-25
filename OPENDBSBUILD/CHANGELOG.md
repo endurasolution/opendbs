@@ -43,8 +43,9 @@ See [SECURITY.md](SECURITY.md#fixed-in-101) for details.
 
 ### Other changes
 
-- Version 1.0.1 for the server and the Node.js, Python and PHP drivers.
+- Version 1.0.1 for the server and the Node.js, Python, PHP and Dart / Flutter drivers.
 - **npm package `opendbs` 1.0.1** is the new Node.js client (no dependencies, cluster failover, safe retries, TypeScript types). Code written for the 1.0.0 client keeps working: its methods, such as `insert(db, rack, doc)` and `login(username, password)`, and its `baseURL` option are still supported. `ignoreSSL` is no longer supported; use `NODE_EXTRA_CA_CERTS`.
+- **pub.dev package `opendbs` 1.0.1** is a new Dart / Flutter client with the same API as the other drivers (racks, SQL with parameters, transactions, cluster failover, safe retries). It also works on the web and in plain Dart. The 1.0.0 methods keep working, and its `fuzzySearch()` now calls the right endpoint.
 - **Docker image `endurasolution/opendbs:1.0.1`**: builds the Linux engine, runs in production mode as an unprivileged user, and keeps data and keys in the `/data` volume.
 - New documentation: [README](README.md), [Administrator Guide](docs/ADMIN_GUIDE.md) (including cluster and sharding), and [SECURITY.md](SECURITY.md).
 - The admin panel's API docs now list the cluster and sharding endpoints.

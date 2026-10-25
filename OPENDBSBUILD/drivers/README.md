@@ -1,16 +1,16 @@
 # OpenDBS client libraries
 
-Official clients for **Node.js**, **Python** and **PHP**. They talk to the OpenDBS REST API over a kept-alive
+Official clients for **Node.js**, **Python**, **PHP** and **Dart / Flutter**. They talk to the OpenDBS REST API over a kept-alive
 HTTP(S) connection, so there is nothing to compile and no driver binaries to install.
 
 Authenticate with an **API key** (create one in the admin panel → API keys; it can be limited to certain
 databases and IP addresses) or with a **username/password** (plus a 2FA code if the account uses 2FA).
 
-| | Node.js | Python | PHP |
-|---|---|---|---|
-| Folder | `nodejs/` | `python/` | `php/` |
-| Install | `npm install opendbs` (or `npm install ./drivers/nodejs`) | `pip install ./drivers/python` | `composer require opendbs/client` (path repo) or `require 'drivers/php/src/OpenDBS.php'` |
-| Needs | Node 18+ | Python 3.8+ (stdlib only) | PHP 8.0+ with curl, json |
+| | Node.js | Python | PHP | Dart / Flutter |
+|---|---|---|---|---|
+| Folder | `nodejs/` | `python/` | `php/` | `flutter/` |
+| Install | `npm install opendbs` (or `npm install ./drivers/nodejs`) | `pip install ./drivers/python` | `composer require opendbs/client` (path repo) or `require 'drivers/php/src/OpenDBS.php'` | `opendbs: ^1.0.1` in `pubspec.yaml` |
+| Needs | Node 18+ | Python 3.8+ (stdlib only) | PHP 8.0+ with curl, json | Dart 3 (Flutter on any platform, including web) |
 
 ## Node.js
 
@@ -84,5 +84,24 @@ $client->transaction(function (\OpenDBS\TxBuilder $tx) use ($id) {
 });
 ```
 
-Errors raise `OpenDBSError` (Node, Python) / `OpenDBS\OpenDBSException` (PHP) with the HTTP `status`
+## Dart / Flutter
+
+```dart
+import 'package:opendbs/opendbs.dart';
+
+final client = OpenDBS('http://localhost:4402', apiKey: 'opendbs_...');
+final customers = client.database('shop').table('customers');
+final id = await customers.insert({'name': 'Asha', 'email': 'asha@example.com', 'age': 31});
+final page = await customers.find({'age': {r'$gte': 18}}, sort: 'age', order: 'desc', limit: 20);
+final rows = (await client.database('shop').sql('SELECT * FROM customers WHERE age > ?', [30]))['result'];
+
+await client.transaction((tx) {
+  final order = tx.insert('shop', 'orders', {'customer_id': id, 'total': 40});
+  tx.insert('shop', 'order_items', {'order_id': order, 'sku': 'LAMP-1'});
+});
+```
+
+See [flutter/README.md](flutter/README.md) for the full API.
+
+Errors raise `OpenDBSError` (Node, Python) / `OpenDBS\OpenDBSException` (PHP) / `OpenDBSException` (Dart) with the HTTP `status`
 and the server's message.

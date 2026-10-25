@@ -1,0 +1,23 @@
+name: opendbs
+description: >-
+  Official Dart and Flutter client for OpenDBS, a document and SQL database
+  server. Documents, SQL, aggregation, transactions and cluster failover.
+version: 1.0.1
+homepage: https://github.com/endurasolution/opendbs/tree/main/OPENDBSBUILD/drivers/flutter
+repository: https://github.com/endurasolution/opendbs
+issue_tracker: https://github.com/endurasolution/opendbs/issues
+topics:
+  - database
+  - sql
+  - nosql
+  - client
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  http: ^1.1.0
+
+dev_dependencies:
+  lints: ^3.0.0
+  test: ^1.24.0
