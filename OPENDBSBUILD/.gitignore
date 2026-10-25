@@ -9,3 +9,6 @@ opendbs.key
 *.key
 # Old build archives
 *.zip
+# Local benchmark output
+benchmarks/results.jsonl
+benchmarks/results.ts

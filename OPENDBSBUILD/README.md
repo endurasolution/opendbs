@@ -270,6 +270,8 @@ These figures were measured on a development laptop (hybrid 8+ core CPU, NVMe SS
 | SQL GROUP BY over a large rack | 1 thread ~3.0 s → parallel workers ~0.3–0.45 s (6–9×) |
 | Cluster failover (primary killed) | new primary in ~2.5–3.5 s; with `majority`, no acknowledged write lost |
 
+**Compared with other databases.** The same workloads were run on OpenDBS, PostgreSQL 16, MySQL 8.4, MongoDB 7.0 and SQLite in Docker on one machine (100,000 rows, 5 runs each). PostgreSQL was the fastest server in every test. OpenDBS was third of the four servers for writes (bulk load, single-row inserts, updates), ahead of MySQL, and last for point reads, indexed queries and GROUP BY. Results and method: [opendbs.in/benchmarks](https://opendbs.in/benchmarks). Scripts to reproduce them: [benchmarks/](benchmarks/).
+
 ---
 
 ## Documentation

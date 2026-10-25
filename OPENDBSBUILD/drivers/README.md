@@ -89,7 +89,7 @@ $client->transaction(function (\OpenDBS\TxBuilder $tx) use ($id) {
 ```dart
 import 'package:opendbs/opendbs.dart';
 
-final client = OpenDBS('http://localhost:4402', apiKey: 'opendbs_...');
+final client = OpenDBS('http://localhost:4402', apiKey: 'odbs_...');
 final customers = client.database('shop').table('customers');
 final id = await customers.insert({'name': 'Asha', 'email': 'asha@example.com', 'age': 31});
 final page = await customers.find({'age': {r'$gte': 18}}, sort: 'age', order: 'desc', limit: 20);

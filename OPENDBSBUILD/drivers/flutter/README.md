@@ -19,7 +19,7 @@ dependencies:
 import 'package:opendbs/opendbs.dart';
 
 // With an API key (admin panel → API keys; can be limited to databases and IPs)
-final client = OpenDBS('http://localhost:4402', apiKey: 'opendbs_...');
+final client = OpenDBS('http://localhost:4402', apiKey: 'odbs_...');
 
 // Or with a user. The client signs in on the first call and again when the session expires.
 final client2 = OpenDBS('http://localhost:4402', username: 'app', password: '...');
@@ -27,7 +27,7 @@ final client2 = OpenDBS('http://localhost:4402', username: 'app', password: '...
 // A cluster
 final client3 = OpenDBS.cluster(
   ['http://10.0.0.5:4402', 'http://10.0.0.6:4402', 'http://10.0.0.7:4402'],
-  apiKey: 'opendbs_...',
+  apiKey: 'odbs_...',
 );
 ```
 
