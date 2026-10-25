@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 export declare function validateIdentifier(name: string): boolean;
 export declare function validateFieldName(name: string): boolean;
-export declare function sanitizeObject(obj: any, depth?: number): any;
+export declare function sanitizeObject(obj: any, depth?: number, parentKey?: string): any;
 /**
  * Strips prototype-pollution keys from a document body at any depth and
  * bounds nesting so a hostile payload can't blow the stack in later

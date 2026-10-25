@@ -167,6 +167,16 @@ async function start() {
             return JSON.stringify({ error: 'The change could not be made durable (disk error). It may not survive a crash.' });
         }
     });
+    // Server-Timing: time spent inside OpenDBS for this request (authentication, the query
+    // or write, and the fsync), without the network. Registered after the durability hook.
+    const startedAt = new WeakMap();
+    fastify.addHook('onRequest', async (request) => { startedAt.set(request, process.hrtime.bigint()); });
+    fastify.addHook('onSend', async (request, reply, payload) => {
+        const t0 = startedAt.get(request);
+        if (t0 !== undefined)
+            reply.header('Server-Timing', `app;dur=${(Number(process.hrtime.bigint() - t0) / 1e6).toFixed(3)}`);
+        return payload;
+    });
     const authService = new auth_service_1.AuthService(engine);
     const accessKeys = new access_key_service_1.AccessKeyService(engine);
     authService.setAccessKeyAuthenticator(accessKeys);

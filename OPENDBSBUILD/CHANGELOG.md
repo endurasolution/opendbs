@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: SQL joins over more than 1,000 distinct keys failed** with "Array in query exceeds max length (1000)". A join passes the keys it found on one side to the other side as an internal `$in` list, which hit the limit meant for user queries. `$in` / `$nin` lists of plain values (matched through a set lookup) may now hold up to 20,000 items; other query arrays keep the 1,000 limit.
+- **New: `Server-Timing` response header** (`app;dur=<ms>`): the time OpenDBS spent on the request (authentication, the query or write, and the fsync), without the network. Browser developer tools show it, and the website's live demo uses it.
+
 ## 1.0.1 — first stable release (2026-10-25)
 
 This release is the result of a security review and attack testing of the whole server. A test that attacks a live server (`tests/security-test.js`) now passes all 70 of its checks. The full regression suite also passes:

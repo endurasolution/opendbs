@@ -90,15 +90,22 @@ function validateFieldName(name) {
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const MAX_QUERY_DEPTH = 6;
 const MAX_QUERY_KEYS = 50;
-function sanitizeObject(obj, depth = 0) {
+const MAX_QUERY_ARRAY = 1000;
+// $in / $nin lists of plain values are matched through a Set, so long ones are cheap.
+// SQL pushes join keys and IN (...) lists down this way (up to 10,000 values, each
+// in its number and string form).
+const MAX_SET_LIST = 20_000;
+const isScalar = (x) => x === null || typeof x !== 'object';
+function sanitizeObject(obj, depth = 0, parentKey) {
     if (depth > MAX_QUERY_DEPTH) {
         throw new Error('Query object too deeply nested (max depth 6)');
     }
     if (obj === null || typeof obj !== 'object')
         return obj;
     if (Array.isArray(obj)) {
-        if (obj.length > 1000)
-            throw new Error('Array in query exceeds max length (1000)');
+        const max = (parentKey === '$in' || parentKey === '$nin') && obj.every(isScalar) ? MAX_SET_LIST : MAX_QUERY_ARRAY;
+        if (obj.length > max)
+            throw new Error(`Array in query exceeds max length (${max})`);
         return obj.map((item) => sanitizeObject(item, depth + 1));
     }
     const keys = Object.keys(obj);
@@ -109,7 +116,7 @@ function sanitizeObject(obj, depth = 0) {
     for (const key of keys) {
         if (DANGEROUS_KEYS.has(key))
             continue; // drop silently
-        clean[key] = sanitizeObject(obj[key], depth + 1);
+        clean[key] = sanitizeObject(obj[key], depth + 1, key);
     }
     return clean;
 }

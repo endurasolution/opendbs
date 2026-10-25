@@ -155,6 +155,20 @@ const b64u = (o) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).t
         check(big.status === 413, 'body over BODY_LIMIT_MB refused (413)', big.status);
         const deep = await api('POST', '/api/databases/sec/racks/notes/search', { ...A, raw: '{"query":' + '{"$and":['.repeat(3000) + '{}' + ']}'.repeat(3000) + '}', headers: { 'content-type': 'application/json' } });
         check(deep.status === 400 && (await api('GET', '/health')).status === 200, 'deeply nested query refused, server up', deep.status);
+        // Query array limits: long arrays of objects (compared one by one) are refused;
+        // long $in lists of plain values (a Set lookup) are allowed, and SQL relies on them.
+        const objs = await api('POST', '/api/databases/sec/racks/notes/search', { ...A, body: { query: { t: { $in: Array.from({ length: 1001 }, (_, i) => ({ i })) } } } });
+        check(objs.status === 400, '$in with 1,001 objects refused', objs.status);
+        const all = await api('POST', '/api/databases/sec/racks/notes/search', { ...A, body: { query: { t: { $all: Array.from({ length: 1001 }, (_, i) => `v${i}`) } } } });
+        check(all.status === 400, '$all with 1,001 values refused', all.status);
+        const setIn = await api('POST', '/api/databases/sec/racks/notes/search', { ...A, body: { query: { t: { $in: [...Array.from({ length: 4999 }, (_, i) => `v${i}`), 'hello'] } } } });
+        check(setIn.status === 200 && setIn.data.total === 1, '$in with 5,000 plain values works', { s: setIn.status, d: setIn.data });
+        await api('POST', '/api/databases/sec/racks', { ...A, body: { name: 'jl', type: 'nosql' } });
+        await api('POST', '/api/databases/sec/racks', { ...A, body: { name: 'jr', type: 'nosql' } });
+        const rIds = (await api('POST', '/api/databases/sec/racks/jr/documents', { ...A, body: Array.from({ length: 1500 }, (_, i) => ({ g: i % 3 })) })).data.ids;
+        await api('POST', '/api/databases/sec/racks/jl/documents', { ...A, body: rIds.map((id) => ({ ref: id })) });
+        const join = await api('POST', '/api/sql/query', { ...A, body: { database: 'sec', query: 'SELECT r.g, COUNT(*) AS n FROM jl l JOIN jr r ON l.ref = r.id GROUP BY r.g ORDER BY r.g' } });
+        check(join.status === 200 && join.data.result?.map((x) => x.n).join() === '500,500,500', 'SQL JOIN over 1,500 distinct keys works', { s: join.status, d: join.data });
         }
 
         console.log('— idempotency (safe retries)');
