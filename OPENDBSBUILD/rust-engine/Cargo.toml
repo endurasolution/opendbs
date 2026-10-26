@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 authors = ["OpenDBS Team"]
 description = "Rust-accelerated full-text and vector search index for OpenDBS"
-license = "MIT"
+license = "CC-BY-NC-4.0"
 
 [lib]
 crate-type = ["cdylib"]

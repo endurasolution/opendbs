@@ -9,6 +9,7 @@ For OpenDBS server 1.0.
 * Works on the web (the package no longer requires `dart:io`), and in plain Dart without Flutter.
 * `fuzzySearch()` called the wrong endpoint. Fixed.
 * `OpenDBSException` now also has the response `body`.
+* Licence: CC BY-NC 4.0, the same as OpenDBS itself (1.0.0 was published with an MIT licence file by mistake).
 * The 1.0.0 methods (`login`, `insert(db, rack, doc)`, `find`, `sql(db, query)`, `search`, `createRack(db, name, type:, schema:)`, …) keep working and return the same values.
 
 ## 1.0.0
